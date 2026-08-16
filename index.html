@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Encargos — control de pedidos y pagos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #F5F6F2;
+    --surface: #FFFFFF;
+    --surface-hover: #EFF1EC;
+    --ink: #1F2A24;
+    --ink-soft: #5B6760;
+    --border: #E1E4DD;
+    --accent: #3A6351;
+    --accent-soft: #E7EFE9;
+    --accent-strong: #2C4D3F;
+    --amber: #B5893C;
+    --amber-soft: #F5EDDC;
+    --danger: #B5484B;
+    --danger-soft: #F6E7E6;
+    --shadow: 0 1px 2px rgba(31,42,36,0.04), 0 4px 14px rgba(31,42,36,0.05);
+    --radius: 14px;
+    color-scheme: light;
+  }
+  [data-theme="dark"]{
+    --bg: #141815;
+    --surface: #1C221E;
+    --surface-hover: #232A25;
+    --ink: #E9ECE6;
+    --ink-soft: #94A199;
+    --border: #2A322C;
+    --accent: #6BA286;
+    --accent-soft: #22322A;
+    --accent-strong: #8CC1A4;
+    --amber: #D3AD6B;
+    --amber-soft: #332B1C;
+    --danger: #D9787A;
+    --danger-soft: #3A2323;
+    --shadow: 0 1px 2px rgba(0,0,0,0.2), 0 8px 24px rgba(0,0,0,0.28);
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    min-height:100vh;
+    transition:background .35s ease, color .35s ease;
+    -webkit-font-smoothing:antialiased;
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+  .shell{ max-width:720px; margin:0 auto; padding:0 20px 80px; }
+
+  /* Top bar */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; padding:34px 0 20px; }
+  .brand{display:flex; flex-direction:column; gap:2px;}
+  .brand h1{ font-family:'Fraunces', serif; font-weight:600; font-size:27px; letter-spacing:-0.01em; margin:0; }
+  .brand span{ font-size:13px; color:var(--ink-soft); font-weight:500; }
+  .theme-toggle{
+    width:40px; height:40px; border-radius:50%; border:1px solid var(--border); background:var(--surface);
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    transition:background .2s ease, transform .15s ease; color:var(--ink); flex:0 0 auto;
+  }
+  .theme-toggle:hover{background:var(--surface-hover); transform:translateY(-1px);}
+  .theme-toggle:active{transform:scale(0.94);}
+  .theme-toggle svg{width:18px; height:18px;}
+
+  /* Summary cards */
+  .stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+  .stat-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 14px; box-shadow:var(--shadow); transition:background .35s ease, border-color .35s ease;
+  }
+  .stat-label{ font-size:11.5px; color:var(--ink-soft); font-weight:600; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px; }
+  .stat-value{ font-family:'IBM Plex Mono', monospace; font-size:17px; font-weight:600; color:var(--ink); line-height:1.2; }
+  .stat-value.money{ color:var(--accent-strong); }
+  .stat-sub{ font-size:11.5px; color:var(--ink-soft); margin-top:3px; }
+
+  /* Form */
+  .form-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px; box-shadow:var(--shadow); margin-bottom:18px; transition:background .35s ease, border-color .35s ease;
+  }
+  .form-title{ font-size:12.5px; font-weight:600; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; margin-bottom:12px; }
+  .form-grid{ display:grid; grid-template-columns: 1.6fr 1fr; gap:10px; margin-bottom:10px; }
+  .form-grid.row2{ grid-template-columns: 1fr 1fr 1fr; }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size:11.5px; color:var(--ink-soft); font-weight:500; }
+  .field input{
+    padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg);
+    color:var(--ink); font-family:'Inter', sans-serif; font-size:14px; outline:none;
+    transition:border-color .2s ease, box-shadow .2s ease, background .35s ease;
+  }
+  .field input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .field input::placeholder{ color:var(--ink-soft); opacity:.7; }
+  .add-btn{
+    display:flex; align-items:center; justify-content:center; gap:6px; width:100%;
+    padding:12px; border-radius:12px; border:none; background:var(--accent); color:#fff;
+    font-family:'Inter', sans-serif; font-size:14.5px; font-weight:600; cursor:pointer;
+    transition:background .2s ease, transform .15s ease; margin-top:4px;
+  }
+  .add-btn:hover{background:var(--accent-strong);}
+  .add-btn:active{transform:scale(0.98);}
+  .add-btn svg{width:16px; height:16px;}
+
+  .image-upload{ display:flex; align-items:center; gap:10px; }
+  .upload-btn{
+    display:flex; align-items:center; gap:7px; padding:10px 13px; border-radius:10px;
+    border:1px dashed var(--border); background:var(--bg); color:var(--ink-soft);
+    font-size:13px; font-weight:500; cursor:pointer; transition:all .18s ease; white-space:nowrap;
+  }
+  .upload-btn:hover{ border-color:var(--accent); color:var(--accent-strong); }
+  .upload-btn svg{ width:16px; height:16px; flex:0 0 auto; }
+  .upload-preview-wrap{ position:relative; flex:0 0 auto; }
+  .upload-preview{ width:44px; height:44px; border-radius:9px; object-fit:cover; border:1px solid var(--border); display:block; }
+  .preview-clear{
+    position:absolute; top:-6px; right:-6px; width:19px; height:19px; border-radius:50%;
+    background:var(--danger); color:#fff; border:2px solid var(--surface); display:flex; align-items:center;
+    justify-content:center; cursor:pointer; padding:0;
+  }
+  .preview-clear svg{ width:10px; height:10px; }
+
+  /* Filters */
+  .filters{ display:flex; gap:6px; margin-bottom:16px; overflow-x:auto; padding-bottom:2px; }
+  .filter-btn{
+    padding:7px 14px; border-radius:999px; border:1px solid var(--border); background:var(--surface);
+    color:var(--ink-soft); font-size:13px; font-weight:500; cursor:pointer; transition:all .2s ease;
+    font-family:'Inter', sans-serif; white-space:nowrap;
+  }
+  .filter-btn:hover{background:var(--surface-hover); color:var(--ink);}
+  .filter-btn.active{ background:var(--accent); border-color:var(--accent); color:#fff; }
+
+  /* List */
+  .list{ display:flex; flex-direction:column; gap:10px; }
+  .card{
+    position:relative; background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:16px; box-shadow:var(--shadow); overflow:hidden;
+    transition:background .35s ease, border-color .35s ease, transform .28s ease, opacity .28s ease, max-height .3s ease, margin .3s ease, padding .3s ease;
+    animation:enter .3s cubic-bezier(.2,.8,.3,1);
+  }
+  @keyframes enter{ from{opacity:0; transform:translateY(-6px) scale(.98);} to{opacity:1; transform:translateY(0) scale(1);} }
+  .card.removing{ opacity:0; transform:translateX(24px) scale(.97); max-height:0; padding-top:0; padding-bottom:0; margin:0; border-width:0; }
+  .card::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent); transition:background .25s ease; }
+  .card.status-delivered::before{ background:var(--ink-soft); opacity:.5; }
+  .card.status-overdue::before{ background:var(--danger); }
+  .card.status-soon::before{ background:var(--amber); }
+
+  .card-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
+  .card-heading{ min-width:0; display:flex; gap:11px; align-items:flex-start; }
+  .card-thumb{
+    width:46px; height:46px; border-radius:10px; object-fit:cover; border:1px solid var(--border);
+    flex:0 0 auto; cursor:pointer; transition:transform .15s ease;
+  }
+  .card-thumb:hover{ transform:scale(1.05); }
+  .card-heading-text{ min-width:0; }
+  .card-desc{ font-size:15px; font-weight:600; color:var(--ink); word-break:break-word; }
+  .card.status-delivered .card-desc{ color:var(--ink-soft); }
+  .card-client-row{ display:flex; align-items:center; gap:8px; margin-top:3px; flex-wrap:wrap; }
+  .card-client{ font-size:12.5px; color:var(--ink-soft); }
+  .contact-btn{
+    display:flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px;
+    background:var(--surface-hover); color:var(--ink-soft); text-decoration:none; transition:all .18s ease; flex:0 0 auto;
+  }
+  .contact-btn:hover{ background:var(--accent-soft); color:var(--accent-strong); }
+  .contact-btn svg{ width:12px; height:12px; }
+  .card-actions{ display:flex; gap:4px; flex:0 0 auto; }
+
+  /* Lightbox */
+  .lightbox{
+    position:fixed; inset:0; background:rgba(10,14,11,0.82); display:flex; align-items:center; justify-content:center;
+    padding:24px; z-index:1000; cursor:zoom-out; animation:fadeIn .18s ease;
+  }
+  @keyframes fadeIn{ from{opacity:0;} to{opacity:1;} }
+  .lightbox img{ max-width:100%; max-height:100%; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.4); }
+  .icon-btn{
+    width:30px; height:30px; border-radius:8px; border:none; background:transparent; color:var(--ink-soft);
+    cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .18s ease, color .18s ease, transform .15s ease;
+  }
+  .icon-btn svg{width:15px; height:15px;}
+  .icon-btn:hover{ background:var(--surface-hover); color:var(--accent-strong); transform:translateY(-1px); }
+  .icon-btn.delete:hover{ color:var(--danger); background:var(--danger-soft); }
+  .icon-btn:active{ transform:scale(0.92); }
+
+  .badge{
+    display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; padding:4px 9px;
+    border-radius:999px; margin-bottom:12px;
+  }
+  .badge.delivered{ background:var(--accent-soft); color:var(--accent-strong); }
+  .badge.overdue{ background:var(--danger-soft); color:var(--danger); }
+  .badge.soon{ background:var(--amber-soft); color:var(--amber); }
+  .badge.pending{ background:var(--surface-hover); color:var(--ink-soft); }
+
+  .money-row{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+  .money-box{ background:var(--bg); border-radius:10px; padding:9px 10px; }
+  .money-label{ font-size:10.5px; color:var(--ink-soft); font-weight:600; text-transform:uppercase; letter-spacing:.02em; margin-bottom:3px; }
+  .money-value{ font-family:'IBM Plex Mono', monospace; font-size:13.5px; font-weight:600; color:var(--ink); }
+  .money-value.balance-due{ color:var(--danger); }
+  .money-value.balance-clear{ color:var(--accent-strong); }
+
+  .card-footer{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .deliver-btn{
+    display:flex; align-items:center; gap:6px; padding:8px 13px; border-radius:9px; border:1px solid var(--border);
+    background:var(--bg); color:var(--ink-soft); font-size:12.5px; font-weight:600; cursor:pointer;
+    transition:all .18s ease; font-family:'Inter', sans-serif;
+  }
+  .deliver-btn:hover{ border-color:var(--accent); color:var(--accent-strong); }
+  .deliver-btn svg{ width:14px; height:14px; stroke-width:3; }
+  .card.status-delivered .deliver-btn{ background:var(--accent); border-color:var(--accent); color:#fff; }
+
+  /* Edit mode */
+  .edit-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
+  .edit-grid input{
+    padding:9px 11px; border-radius:9px; border:1px solid var(--accent); background:var(--bg); color:var(--ink);
+    font-family:'Inter', sans-serif; font-size:13.5px; outline:none;
+  }
+  .edit-image-row{ display:flex; align-items:center; gap:10px; grid-column:1 / -1; }
+  .edit-actions{ display:flex; gap:8px; }
+  .edit-actions button{
+    flex:1; padding:9px; border-radius:9px; border:none; font-size:13px; font-weight:600; cursor:pointer;
+    font-family:'Inter', sans-serif; transition:opacity .15s ease;
+  }
+  .edit-actions .save{ background:var(--accent); color:#fff; }
+  .edit-actions .cancel{ background:var(--surface-hover); color:var(--ink-soft); }
+  .edit-actions button:hover{ opacity:.85; }
+
+  /* Empty state */
+  .empty{ text-align:center; padding:48px 20px; color:var(--ink-soft); }
+  .empty svg{ width:34px; height:34px; margin-bottom:12px; opacity:0.5; }
+  .empty p{ margin:0; font-size:14px; font-weight:500; }
+  .empty span{ font-size:12.5px; }
+
+  @media (max-width:520px){
+    .shell{ padding:0 14px 60px; }
+    .topbar{ padding:24px 0 16px; }
+    .brand h1{ font-size:22px; }
+    .stats{ grid-template-columns:1fr; }
+    .form-grid, .form-grid.row2{ grid-template-columns:1fr; }
+    .money-row{ grid-template-columns:1fr 1fr; }
+    .edit-grid{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="topbar">
+    <div class="brand">
+      <h1>Encargos</h1>
+      <span>pedidos, entregas y cobros</span>
+    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema" title="Cambiar tema claro/oscuro">
+      <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+    </button>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-label">Por entregar</div>
+      <div class="stat-value" id="statPending">0</div>
+      <div class="stat-sub" id="statPendingSub">encargos activos</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Próxima entrega</div>
+      <div class="stat-value" id="statNext">—</div>
+      <div class="stat-sub" id="statNextSub"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Saldo por cobrar</div>
+      <div class="stat-value money" id="statBalance">$0</div>
+      <div class="stat-sub" id="statBalanceSub">en total</div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-title">Nuevo encargo</div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="descInput">Descripción del encargo</label>
+        <input type="text" id="descInput" placeholder="Ej: Vestido para quince años" maxlength="120">
+      </div>
+      <div class="field">
+        <label for="clientInput">Cliente (opcional)</label>
+        <input type="text" id="clientInput" placeholder="Nombre" maxlength="60">
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="phoneInput">Teléfono del cliente (opcional)</label>
+        <input type="tel" id="phoneInput" placeholder="Ej: 3001234567" maxlength="20">
+      </div>
+      <div class="field">
+        <label>Foto (opcional)</label>
+        <div class="image-upload">
+          <label class="upload-btn" for="imageInput" id="uploadLabel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
+            <span id="uploadLabelText">Subir foto</span>
+          </label>
+          <input type="file" id="imageInput" accept="image/*" hidden>
+          <div class="upload-preview-wrap" id="previewWrap" style="display:none;">
+            <img id="imagePreview" class="upload-preview">
+            <button type="button" class="preview-clear" id="imageClear" title="Quitar foto">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="form-grid row2">
+      <div class="field">
+        <label for="dateInput">Fecha de entrega</label>
+        <input type="date" id="dateInput">
+      </div>
+      <div class="field">
+        <label for="totalInput">Monto total</label>
+        <input type="number" id="totalInput" placeholder="0" min="0" step="1000">
+      </div>
+      <div class="field">
+        <label for="paidInput">Ya pagó</label>
+        <input type="number" id="paidInput" placeholder="0" min="0" step="1000">
+      </div>
+    </div>
+    <button class="add-btn" id="addBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Agregar encargo
+    </button>
+  </div>
+
+  <div class="filters" id="filters">
+    <button class="filter-btn active" data-filter="all">Todos</button>
+    <button class="filter-btn" data-filter="pending">Por entregar</button>
+    <button class="filter-btn" data-filter="delivered">Entregados</button>
+    <button class="filter-btn" data-filter="owing">Con saldo</button>
+  </div>
+
+  <div class="list" id="list"></div>
+
+  <div class="empty" id="emptyState" style="display:none;">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+    <p id="emptyTitle">Aún no hay encargos</p>
+    <span id="emptySub">Agrega el primero arriba para empezar a llevar tu control.</span>
+  </div>
+
+</div>
+
+<script>
+  let orders = [];
+  let nextId = 1;
+  let currentFilter = "all";
+  let isDark = false;
+  const STORAGE_KEY = 'encargos:orders';
+
+  const list = document.getElementById('list');
+  const descInput = document.getElementById('descInput');
+  const clientInput = document.getElementById('clientInput');
+  const dateInput = document.getElementById('dateInput');
+  const totalInput = document.getElementById('totalInput');
+  const paidInput = document.getElementById('paidInput');
+  const addBtn = document.getElementById('addBtn');
+  const emptyState = document.getElementById('emptyState');
+  const emptyTitle = document.getElementById('emptyTitle');
+  const emptySub = document.getElementById('emptySub');
+  const filters = document.getElementById('filters');
+  const themeToggle = document.getElementById('themeToggle');
+  const themeIcon = document.getElementById('themeIcon');
+
+  const statPending = document.getElementById('statPending');
+  const statPendingSub = document.getElementById('statPendingSub');
+  const statNext = document.getElementById('statNext');
+  const statNextSub = document.getElementById('statNextSub');
+  const statBalance = document.getElementById('statBalance');
+  const statBalanceSub = document.getElementById('statBalanceSub');
+
+  const sunPath = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
+  const moonPath = '<path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/>';
+
+  const phoneInput = document.getElementById('phoneInput');
+  const imageInput = document.getElementById('imageInput');
+  const previewWrap = document.getElementById('previewWrap');
+  const imagePreview = document.getElementById('imagePreview');
+  const imageClear = document.getElementById('imageClear');
+  const uploadLabelText = document.getElementById('uploadLabelText');
+  let pendingImage = '';
+
+  const money = (n) => new Intl.NumberFormat('es-CO', { style:'currency', currency:'COP', maximumFractionDigits:0 }).format(n || 0);
+  const escapeHtml = (str) => { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; };
+  const todayStr = () => new Date().toISOString().slice(0,10);
+  const digitsOnly = (str) => (str || '').replace(/\D/g, '');
+
+  function compressImage(file){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const maxW = 720;
+          const scale = Math.min(1, maxW / img.width);
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.72));
+        };
+        img.onerror = reject;
+        img.src = reader.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  imageInput.addEventListener('change', async () => {
+    const file = imageInput.files[0];
+    if(!file) return;
+    try{
+      pendingImage = await compressImage(file);
+      imagePreview.src = pendingImage;
+      previewWrap.style.display = 'flex';
+      uploadLabelText.textContent = 'Cambiar foto';
+    } catch(err){
+      console.error('No se pudo procesar la imagen:', err);
+    }
+  });
+  imageClear.addEventListener('click', () => {
+    pendingImage = '';
+    imageInput.value = '';
+    previewWrap.style.display = 'none';
+    uploadLabelText.textContent = 'Subir foto';
+  });
+
+  function fmtDate(iso){
+    if(!iso) return 'sin fecha';
+    const [y,m,d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  function statusOf(order){
+    if(order.delivered) return 'delivered';
+    if(!order.dueDate) return 'pending';
+    if(order.dueDate < todayStr()) return 'overdue';
+    const diffDays = (new Date(order.dueDate) - new Date(todayStr())) / 86400000;
+    if(diffDays <= 2) return 'soon';
+    return 'pending';
+  }
+
+  function badgeFor(status, order){
+    if(status === 'delivered') return { cls:'delivered', text:'Entregado', icon:'<polyline points="4 12 10 18 20 6"/>' };
+    if(status === 'overdue') return { cls:'overdue', text:'Atrasado · ' + fmtDate(order.dueDate), icon:'<circle cx="12" cy="12" r="9"/><line x1="12" y1="7" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12" y2="16.5"/>' };
+    if(status === 'soon') return { cls:'soon', text:'Entrega pronto · ' + fmtDate(order.dueDate), icon:'<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/>' };
+    return { cls:'pending', text: order.dueDate ? ('Entrega ' + fmtDate(order.dueDate)) : 'Sin fecha de entrega', icon:'<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/>' };
+  }
+
+  async function loadOrders(){
+    try{
+      const result = await window.storage.get(STORAGE_KEY, false);
+      orders = result ? JSON.parse(result.value) : [
+        { id: 1, desc: "Vestido para quince años", client: "Camila R.", phone: "3001234567", image: "", dueDate: addDays(3), total: 350000, paid: 150000, delivered: false },
+        { id: 2, desc: "Arreglo de pantalón", client: "", phone: "", image: "", dueDate: addDays(-1), total: 20000, paid: 20000, delivered: false },
+        { id: 3, desc: "Cortina sala", client: "Don Jairo", phone: "3109876543", image: "", dueDate: addDays(-6), total: 180000, paid: 180000, delivered: true },
+      ];
+      nextId = orders.length ? Math.max(...orders.map(o => o.id)) + 1 : 1;
+    } catch(err){
+      console.error('No se pudieron cargar los encargos:', err);
+      orders = [];
+    }
+    render();
+  }
+
+  function addDays(n){
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return d.toISOString().slice(0,10);
+  }
+
+  async function saveOrders(){
+    try{
+      const result = await window.storage.set(STORAGE_KEY, JSON.stringify(orders), false);
+      if(!result) console.error('No se pudo guardar (respuesta vacía)');
+    } catch(err){
+      console.error('Error al guardar los encargos:', err);
+    }
+  }
+
+  function render(){
+    const filtered = orders.filter(o => {
+      if(currentFilter === 'all') return true;
+      if(currentFilter === 'pending') return !o.delivered;
+      if(currentFilter === 'delivered') return o.delivered;
+      if(currentFilter === 'owing') return (o.total - o.paid) > 0;
+      return true;
+    }).slice().sort((a,b) => {
+      if(a.delivered !== b.delivered) return a.delivered ? 1 : -1;
+      return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
+    });
+
+    list.innerHTML = '';
+    if(filtered.length === 0){
+      emptyState.style.display = 'block';
+      if(orders.length === 0){
+        emptyTitle.textContent = 'Aún no hay encargos';
+        emptySub.textContent = 'Agrega el primero arriba para empezar a llevar tu control.';
+      } else {
+        emptyTitle.textContent = 'Nada aquí por ahora';
+        emptySub.textContent = 'Prueba con otro filtro.';
+      }
+    } else {
+      emptyState.style.display = 'none';
+    }
+
+    filtered.forEach(order => {
+      const status = statusOf(order);
+      const badge = badgeFor(status, order);
+      const balance = order.total - order.paid;
+      const row = document.createElement('div');
+      row.className = 'card status-' + status;
+      row.dataset.id = order.id;
+      row.innerHTML = `
+        <div class="card-top">
+          <div class="card-heading">
+            ${order.image ? `<img class="card-thumb" src="${order.image}" alt="Foto del encargo">` : ''}
+            <div class="card-heading-text">
+              <div class="card-desc">${escapeHtml(order.desc)}</div>
+              ${(order.client || order.phone) ? `<div class="card-client-row">
+                ${order.client ? `<span class="card-client">${escapeHtml(order.client)}</span>` : ''}
+                ${order.phone ? `
+                  <a class="contact-btn" href="tel:${digitsOnly(order.phone)}" title="Llamar" onclick="event.stopPropagation()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                  </a>
+                  <a class="contact-btn" href="https://wa.me/57${digitsOnly(order.phone)}" target="_blank" rel="noopener" title="WhatsApp" onclick="event.stopPropagation()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15.5a8.5 8.5 0 0 1-11.4 4L3 21l1.6-6.4A8.5 8.5 0 1 1 21 15.5z"/></svg>
+                  </a>
+                ` : ''}
+              </div>` : ''}
+            </div>
+          </div>
+          <div class="card-actions">
+            <button class="icon-btn edit" title="Editar" aria-label="Editar encargo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </button>
+            <button class="icon-btn delete" title="Eliminar" aria-label="Eliminar encargo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>
+          </div>
+        </div>
+        <span class="badge ${badge.cls}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${badge.icon}</svg>${badge.text}</span>
+        <div class="money-row">
+          <div class="money-box"><div class="money-label">Total</div><div class="money-value">${money(order.total)}</div></div>
+          <div class="money-box"><div class="money-label">Pagado</div><div class="money-value">${money(order.paid)}</div></div>
+          <div class="money-box"><div class="money-label">Saldo</div><div class="money-value ${balance > 0 ? 'balance-due' : 'balance-clear'}">${money(balance)}</div></div>
+        </div>
+        <div class="card-footer">
+          <button class="deliver-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>
+            ${order.delivered ? 'Entregado' : 'Marcar entregado'}
+          </button>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+
+    const pending = orders.filter(o => !o.delivered);
+    statPending.textContent = pending.length;
+    statPendingSub.textContent = pending.length === 1 ? 'encargo activo' : 'encargos activos';
+
+    const overdueCount = pending.filter(o => statusOf(o) === 'overdue').length;
+    const upcoming = pending.filter(o => o.dueDate).sort((a,b) => a.dueDate.localeCompare(b.dueDate))[0];
+    if(upcoming){
+      statNext.textContent = fmtDate(upcoming.dueDate);
+      statNextSub.textContent = upcoming.desc.length > 22 ? upcoming.desc.slice(0,22) + '…' : upcoming.desc;
+    } else {
+      statNext.textContent = '—';
+      statNextSub.textContent = overdueCount > 0 ? `${overdueCount} atrasado(s)` : 'sin pendientes';
+    }
+
+    const totalBalance = orders.reduce((sum,o) => sum + Math.max(o.total - o.paid, 0), 0);
+    statBalance.textContent = money(totalBalance);
+    const owingCount = orders.filter(o => (o.total - o.paid) > 0).length;
+    statBalanceSub.textContent = owingCount === 0 ? 'todo al día' : `en ${owingCount} encargo(s)`;
+  }
+
+  function addOrder(){
+    const desc = descInput.value.trim();
+    if(!desc) { descInput.focus(); return; }
+    const total = Number(totalInput.value) || 0;
+    const paid = Math.min(Number(paidInput.value) || 0, total || Number(paidInput.value) || 0);
+    orders.push({
+      id: nextId++,
+      desc,
+      client: clientInput.value.trim(),
+      phone: phoneInput.value.trim(),
+      image: pendingImage,
+      dueDate: dateInput.value || '',
+      total,
+      paid,
+      delivered: false
+    });
+    descInput.value = ''; clientInput.value = ''; phoneInput.value = ''; dateInput.value = ''; totalInput.value = ''; paidInput.value = '';
+    pendingImage = ''; imageInput.value = ''; previewWrap.style.display = 'none'; uploadLabelText.textContent = 'Subir foto';
+    render();
+    saveOrders();
+    descInput.focus();
+  }
+
+  function openLightbox(src){
+    const box = document.createElement('div');
+    box.className = 'lightbox';
+    box.innerHTML = `<img src="${src}" alt="Foto ampliada">`;
+    box.addEventListener('click', () => box.remove());
+    document.body.appendChild(box);
+  }
+
+  function toggleDelivered(id){
+    const o = orders.find(o => o.id === id);
+    if(o) o.delivered = !o.delivered;
+    render();
+    saveOrders();
+  }
+
+  function deleteOrder(id){
+    const row = list.querySelector(`.card[data-id="${id}"]`);
+    if(row){
+      row.classList.add('removing');
+      row.addEventListener('transitionend', () => {
+        orders = orders.filter(o => o.id !== id);
+        render();
+        saveOrders();
+      }, { once:true });
+    } else {
+      orders = orders.filter(o => o.id !== id);
+      render();
+      saveOrders();
+    }
+  }
+
+  function startEdit(id){
+    const row = list.querySelector(`.card[data-id="${id}"]`);
+    const order = orders.find(o => o.id === id);
+    if(!row || !order) return;
+    let editImage = order.image || '';
+    row.innerHTML = `
+      <div class="form-title">Editar encargo</div>
+      <div class="edit-grid">
+        <input type="text" class="e-desc" value="${escapeHtml(order.desc)}" placeholder="Descripción" maxlength="120">
+        <input type="text" class="e-client" value="${escapeHtml(order.client || '')}" placeholder="Cliente (opcional)" maxlength="60">
+        <input type="tel" class="e-phone" value="${escapeHtml(order.phone || '')}" placeholder="Teléfono (opcional)" maxlength="20">
+        <input type="date" class="e-date" value="${order.dueDate || ''}">
+        <input type="number" class="e-total" value="${order.total}" placeholder="Monto total" min="0" step="1000">
+        <input type="number" class="e-paid" value="${order.paid}" placeholder="Ya pagó" min="0" step="1000">
+        <div class="edit-image-row">
+          <label class="upload-btn" style="cursor:pointer;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>
+            <span class="e-image-label">${editImage ? 'Cambiar foto' : 'Agregar foto'}</span>
+            <input type="file" class="e-image" accept="image/*" hidden>
+          </label>
+          <div class="upload-preview-wrap" style="display:${editImage ? 'flex' : 'none'};">
+            <img class="e-image-preview upload-preview" src="${editImage}">
+            <button type="button" class="preview-clear e-image-clear" title="Quitar foto">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="edit-actions">
+        <button class="save">Guardar</button>
+        <button class="cancel">Cancelar</button>
+      </div>
+    `;
+    const fileInput = row.querySelector('.e-image');
+    const previewWrapEl = row.querySelector('.upload-preview-wrap');
+    const previewImg = row.querySelector('.e-image-preview');
+    const labelText = row.querySelector('.e-image-label');
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if(!file) return;
+      try{
+        editImage = await compressImage(file);
+        previewImg.src = editImage;
+        previewWrapEl.style.display = 'flex';
+        labelText.textContent = 'Cambiar foto';
+      } catch(err){ console.error('No se pudo procesar la imagen:', err); }
+    });
+    row.querySelector('.e-image-clear').addEventListener('click', () => {
+      editImage = '';
+      fileInput.value = '';
+      previewWrapEl.style.display = 'none';
+      labelText.textContent = 'Agregar foto';
+    });
+    row.querySelector('.save').addEventListener('click', () => {
+      const desc = row.querySelector('.e-desc').value.trim();
+      order.desc = desc || order.desc;
+      order.client = row.querySelector('.e-client').value.trim();
+      order.phone = row.querySelector('.e-phone').value.trim();
+      order.dueDate = row.querySelector('.e-date').value || '';
+      order.total = Number(row.querySelector('.e-total').value) || 0;
+      order.paid = Number(row.querySelector('.e-paid').value) || 0;
+      order.image = editImage;
+      render();
+      saveOrders();
+    });
+    row.querySelector('.cancel').addEventListener('click', render);
+  }
+
+  list.addEventListener('click', e => {
+    const card = e.target.closest('.card');
+    if(!card) return;
+    const id = Number(card.dataset.id);
+    const thumb = e.target.closest('.card-thumb');
+    if(thumb){ openLightbox(thumb.src); return; }
+    if(e.target.closest('.deliver-btn')) toggleDelivered(id);
+    else if(e.target.closest('.edit')) startEdit(id);
+    else if(e.target.closest('.delete')) deleteOrder(id);
+  });
+
+  addBtn.addEventListener('click', addOrder);
+  [descInput, clientInput, totalInput, paidInput].forEach(el => {
+    el.addEventListener('keydown', e => { if(e.key === 'Enter') addOrder(); });
+  });
+
+  filters.addEventListener('click', e => {
+    const btn = e.target.closest('.filter-btn');
+    if(!btn) return;
+    currentFilter = btn.dataset.filter;
+    [...filters.children].forEach(b => b.classList.toggle('active', b === btn));
+    render();
+  });
+
+  themeToggle.addEventListener('click', () => {
+    isDark = !isDark;
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    themeIcon.innerHTML = isDark ? sunPath : moonPath;
+  });
+  themeIcon.innerHTML = moonPath;
+
+  loadOrders();
+</script>
+</body>
+</html>
