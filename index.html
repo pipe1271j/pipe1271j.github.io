@@ -70,6 +70,7 @@
   .theme-toggle:hover{background:var(--surface-hover); transform:translateY(-1px);}
   .theme-toggle:active{transform:scale(0.94);}
   .theme-toggle svg{width:18px; height:18px;}
+  .topbar-actions{ display:flex; gap:8px; flex:0 0 auto; }
 
   /* Summary cards */
   .stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
@@ -149,6 +150,20 @@
     justify-content:center; cursor:pointer; padding:0;
   }
   .preview-clear svg{ width:10px; height:10px; }
+
+  /* Search */
+  .search-row{
+    display:flex; align-items:center; gap:9px; padding:11px 14px; border-radius:12px;
+    border:1px solid var(--border); background:var(--surface); margin-bottom:14px;
+    transition:border-color .2s ease, box-shadow .2s ease, background .35s ease;
+  }
+  .search-row:focus-within{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .search-row svg{ width:16px; height:16px; color:var(--ink-soft); flex:0 0 auto; }
+  .search-row input{
+    flex:1; border:none; outline:none; background:transparent; color:var(--ink);
+    font-family:'Inter', sans-serif; font-size:14px;
+  }
+  .search-row input::placeholder{ color:var(--ink-soft); }
 
   /* Filters */
   .filters{ display:flex; gap:6px; margin-bottom:16px; overflow-x:auto; padding-bottom:2px; }
@@ -244,7 +259,7 @@
   .money-value.balance-due{ color:var(--danger); }
   .money-value.balance-clear{ color:var(--accent-strong); }
 
-  .card-footer{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .card-footer{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
   .deliver-btn{
     display:flex; align-items:center; gap:6px; padding:8px 13px; border-radius:9px; border:1px solid var(--border);
     background:var(--bg); color:var(--ink-soft); font-size:12.5px; font-weight:600; cursor:pointer;
@@ -253,6 +268,13 @@
   .deliver-btn:hover{ border-color:var(--accent); color:var(--accent-strong); }
   .deliver-btn svg{ width:14px; height:14px; stroke-width:3; }
   .card.status-delivered .deliver-btn{ background:var(--accent); border-color:var(--accent); color:#fff; }
+  .receipt-btn{
+    display:flex; align-items:center; gap:6px; padding:8px 13px; border-radius:9px; border:1px solid var(--border);
+    background:var(--bg); color:var(--ink-soft); font-size:12.5px; font-weight:600; cursor:pointer;
+    transition:all .18s ease; font-family:'Inter', sans-serif;
+  }
+  .receipt-btn:hover{ border-color:#3EA262; color:#3EA262; }
+  .receipt-btn svg{ width:14px; height:14px; }
 
   /* Edit mode */
   .edit-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
@@ -295,9 +317,14 @@
       <h1>Encargos</h1>
       <span id="syncStatus">Conectando con Drive…</span>
     </div>
-    <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema" title="Cambiar tema claro/oscuro">
-      <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
-    </button>
+    <div class="topbar-actions">
+      <button class="theme-toggle" id="backupBtn" aria-label="Descargar respaldo" title="Descargar respaldo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+      <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema" title="Cambiar tema claro/oscuro">
+        <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+      </button>
+    </div>
   </div>
 
   <div class="stats">
@@ -382,6 +409,11 @@
     </button>
   </div>
 
+  <div class="search-row">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="searchInput" placeholder="Buscar por descripción o cliente…">
+  </div>
+
   <div class="filters" id="filters">
     <button class="filter-btn active" data-filter="all">Todos</button>
     <button class="filter-btn" data-filter="pending">Por entregar</button>
@@ -403,6 +435,7 @@
   let orders = [];
   let nextId = 1;
   let currentFilter = "all";
+  let searchQuery = "";
   let isDark = false;
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzcwd94Re9yobftgl3iHEbQMj1kS79jvJ1sVyPt_UmYdu6k7utQ39uJw-GwmUxD-ABbuA/exec';
   const ADMIN_USER = 'Creaimagen';
@@ -561,7 +594,9 @@
   }
 
   function render(){
+    const q = searchQuery.trim().toLowerCase();
     const filtered = orders.filter(o => {
+      if(q && !((o.desc || '').toLowerCase().includes(q) || (o.client || '').toLowerCase().includes(q))) return false;
       if(currentFilter === 'all') return true;
       if(currentFilter === 'pending') return !o.delivered;
       if(currentFilter === 'delivered') return o.delivered;
@@ -578,6 +613,9 @@
       if(orders.length === 0){
         emptyTitle.textContent = 'Aún no hay encargos';
         emptySub.textContent = 'Agrega el primero arriba para empezar a llevar tu control.';
+      } else if(q){
+        emptyTitle.textContent = 'Sin resultados';
+        emptySub.textContent = 'No encontramos nada con "' + searchQuery.trim() + '".';
       } else {
         emptyTitle.textContent = 'Nada aquí por ahora';
         emptySub.textContent = 'Prueba con otro filtro.';
@@ -631,6 +669,10 @@
           <button class="deliver-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>
             ${order.delivered ? 'Entregado' : 'Marcar entregado'}
+          </button>
+          <button class="receipt-btn" title="Enviar comprobante por WhatsApp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15.5a8.5 8.5 0 0 1-11.4 4L3 21l1.6-6.4A8.5 8.5 0 1 1 21 15.5z"/></svg>
+            Comprobante
           </button>
         </div>
       `;
@@ -765,6 +807,28 @@
     document.body.appendChild(box);
   }
 
+  function sendReceipt(id){
+    const order = orders.find(o => o.id === id);
+    if(!order) return;
+    const balance = order.total - order.paid;
+    const lines = [
+      `Hola${order.client ? ' ' + order.client : ''}, aquí tu comprobante 🧾`,
+      '',
+      `📦 ${order.desc}`,
+      order.dueDate ? `📅 Entrega: ${fmtDate(order.dueDate)}` : '',
+      `💰 Total: ${money(order.total)}`,
+      `✅ Abonado: ${money(order.paid)}`,
+      balance > 0 ? `🔸 Saldo pendiente: ${money(balance)}` : '✔️ Pagado en su totalidad',
+      '',
+      '¡Gracias por tu confianza!'
+    ].filter(Boolean);
+    const text = encodeURIComponent(lines.join('\n'));
+    const url = order.phone
+      ? `https://wa.me/57${digitsOnly(order.phone)}?text=${text}`
+      : `https://api.whatsapp.com/send?text=${text}`;
+    window.open(url, '_blank', 'noopener');
+  }
+
   function toggleDelivered(id){
     const o = orders.find(o => o.id === id);
     if(!o) return;
@@ -871,6 +935,7 @@
     const thumb = e.target.closest('.card-thumb');
     if(thumb){ openLightbox(thumb.src); return; }
     if(e.target.closest('.deliver-btn')) toggleDelivered(id);
+    else if(e.target.closest('.receipt-btn')) sendReceipt(id);
     else if(e.target.closest('.edit')) startEdit(id);
     else if(e.target.closest('.delete')) deleteOrder(id);
   });
@@ -886,6 +951,24 @@
     currentFilter = btn.dataset.filter;
     [...filters.children].forEach(b => b.classList.toggle('active', b === btn));
     render();
+  });
+
+  document.getElementById('searchInput').addEventListener('input', e => {
+    searchQuery = e.target.value;
+    render();
+  });
+
+  document.getElementById('backupBtn').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(orders, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,10);
+    a.href = url;
+    a.download = `encargos-respaldo-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   });
 
   themeToggle.addEventListener('click', () => {
