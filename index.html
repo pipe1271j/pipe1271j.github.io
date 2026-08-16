@@ -252,7 +252,7 @@
   <div class="topbar">
     <div class="brand">
       <h1>Encargos</h1>
-      <span>pedidos, entregas y cobros</span>
+      <span id="syncStatus">Conectando con Drive…</span>
     </div>
     <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema" title="Cambiar tema claro/oscuro">
       <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
@@ -353,7 +353,7 @@
   let nextId = 1;
   let currentFilter = "all";
   let isDark = false;
-  const STORAGE_KEY = 'encargos:orders';
+  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzcwd94Re9yobftgl3iHEbQMj1kS79jvJ1sVyPt_UmYdu6k7utQ39uJw-GwmUxD-ABbuA/exec';
 
   const list = document.getElementById('list');
   const descInput = document.getElementById('descInput');
@@ -457,17 +457,22 @@
   }
 
   async function loadOrders(){
+    setSyncStatus('Cargando desde Drive…');
     try{
-      const result = await window.storage.get(STORAGE_KEY, false);
-      orders = result ? JSON.parse(result.value) : [
+      const res = await fetch(SCRIPT_URL, { method: 'GET' });
+      if(!res.ok) throw new Error('Respuesta no válida: ' + res.status);
+      const data = await res.json();
+      orders = (Array.isArray(data) && data.length) ? data : [
         { id: 1, desc: "Vestido para quince años", client: "Camila R.", phone: "3001234567", image: "", dueDate: addDays(3), total: 350000, paid: 150000, delivered: false },
         { id: 2, desc: "Arreglo de pantalón", client: "", phone: "", image: "", dueDate: addDays(-1), total: 20000, paid: 20000, delivered: false },
         { id: 3, desc: "Cortina sala", client: "Don Jairo", phone: "3109876543", image: "", dueDate: addDays(-6), total: 180000, paid: 180000, delivered: true },
       ];
       nextId = orders.length ? Math.max(...orders.map(o => o.id)) + 1 : 1;
+      setSyncStatus('Sincronizado con Drive');
     } catch(err){
-      console.error('No se pudieron cargar los encargos:', err);
+      console.error('No se pudieron cargar los encargos desde Drive:', err);
       orders = [];
+      setSyncStatus('Sin conexión con Drive — revisa el enlace', true);
     }
     render();
   }
@@ -479,12 +484,26 @@
   }
 
   async function saveOrders(){
+    setSyncStatus('Guardando en Drive…');
     try{
-      const result = await window.storage.set(STORAGE_KEY, JSON.stringify(orders), false);
-      if(!result) console.error('No se pudo guardar (respuesta vacía)');
+      const res = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(orders)
+      });
+      if(!res.ok) throw new Error('Respuesta no válida: ' + res.status);
+      setSyncStatus('Guardado en Drive');
     } catch(err){
-      console.error('Error al guardar los encargos:', err);
+      console.error('Error al guardar los encargos en Drive:', err);
+      setSyncStatus('No se pudo guardar — revisa tu conexión', true);
     }
+  }
+
+  function setSyncStatus(text, isError){
+    const el = document.getElementById('syncStatus');
+    if(!el) return;
+    el.textContent = text;
+    el.style.color = isError ? 'var(--danger)' : 'var(--ink-soft)';
   }
 
   function render(){
