@@ -82,6 +82,30 @@
   .stat-value.money{ color:var(--accent-strong); }
   .stat-sub{ font-size:11.5px; color:var(--ink-soft); margin-top:3px; }
 
+  /* Cash summary (hidden by default) */
+  .cash-toggle{
+    width:100%; display:flex; align-items:center; justify-content:center; gap:8px;
+    padding:11px; border-radius:12px; border:1px dashed var(--border); background:var(--surface);
+    color:var(--ink-soft); font-size:13.5px; font-weight:600; cursor:pointer; margin-bottom:14px;
+    transition:all .18s ease; font-family:'Inter', sans-serif;
+  }
+  .cash-toggle:hover{ border-color:var(--accent); color:var(--accent-strong); background:var(--surface-hover); }
+  .cash-toggle svg{ width:16px; height:16px; }
+  .cash-panel{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px; box-shadow:var(--shadow); margin:-4px 0 18px;
+    animation: enter .22s cubic-bezier(.2,.8,.3,1);
+  }
+  .cash-row{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:8px 0; font-size:13.5px; color:var(--ink-soft); border-bottom:1px solid var(--border);
+  }
+  .cash-row:last-child{ border-bottom:none; padding-bottom:2px; }
+  .cash-row strong{ font-family:'IBM Plex Mono', monospace; color:var(--ink); font-size:14px; white-space:nowrap; }
+  .cash-row.total{ padding-top:12px; }
+  .cash-row.total span{ font-weight:600; color:var(--ink); }
+  .cash-row.total strong{ color:var(--accent-strong); font-size:17px; }
+
   /* Form */
   .form-card{
     background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
@@ -178,6 +202,23 @@
   }
   @keyframes fadeIn{ from{opacity:0;} to{opacity:1;} }
   .lightbox img{ max-width:100%; max-height:100%; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.4); }
+
+  /* Auth modal */
+  .auth-overlay{
+    position:fixed; inset:0; background:rgba(10,14,11,0.55); display:flex; align-items:center; justify-content:center;
+    padding:20px; z-index:1100; animation:fadeIn .18s ease;
+  }
+  .auth-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:20px; box-shadow:var(--shadow); width:100%; max-width:320px;
+  }
+  .auth-card .field{ margin-bottom:12px; }
+  .auth-card .field input{
+    width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg);
+    color:var(--ink); font-family:'Inter', sans-serif; font-size:14px; outline:none;
+  }
+  .auth-card .field input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .auth-error{ font-size:12.5px; color:var(--danger); margin-top:-4px; }
   .icon-btn{
     width:30px; height:30px; border-radius:8px; border:none; background:transparent; color:var(--ink-soft);
     cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .18s ease, color .18s ease, transform .15s ease;
@@ -277,6 +318,16 @@
     </div>
   </div>
 
+  <button class="cash-toggle" id="cashToggle">
+    <svg id="cashToggleIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+    <span id="cashToggleText">Ver resumen de dinero</span>
+  </button>
+  <div class="cash-panel" id="cashPanel" style="display:none;">
+    <div class="cash-row"><span>Total abonado (ya en tu bolsillo)</span><strong id="cashPaid">$0</strong></div>
+    <div class="cash-row"><span>Total saldo pendiente por cobrar</span><strong id="cashBalance">$0</strong></div>
+    <div class="cash-row total"><span>Total general de todos los encargos</span><strong id="cashTotal">$0</strong></div>
+  </div>
+
   <div class="form-card">
     <div class="form-title">Nuevo encargo</div>
     <div class="form-grid">
@@ -354,6 +405,9 @@
   let currentFilter = "all";
   let isDark = false;
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzcwd94Re9yobftgl3iHEbQMj1kS79jvJ1sVyPt_UmYdu6k7utQ39uJw-GwmUxD-ABbuA/exec';
+  const ADMIN_USER = 'Creaimagen';
+  const ADMIN_PASS = 'Creatividad2026';
+  let unlocked = false;
 
   const list = document.getElementById('list');
   const descInput = document.getElementById('descInput');
@@ -387,7 +441,7 @@
   const uploadLabelText = document.getElementById('uploadLabelText');
   let pendingImage = '';
 
-  const money = (n) => new Intl.NumberFormat('es-CO', { style:'currency', currency:'COP', maximumFractionDigits:0 }).format(n || 0);
+  const money = (n) => '$' + Math.round(n || 0).toLocaleString('es-CO');
   const escapeHtml = (str) => { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; };
   const todayStr = () => new Date().toISOString().slice(0,10);
   const digitsOnly = (str) => (str || '').replace(/\D/g, '');
@@ -601,7 +655,84 @@
     statBalance.textContent = money(totalBalance);
     const owingCount = orders.filter(o => (o.total - o.paid) > 0).length;
     statBalanceSub.textContent = owingCount === 0 ? 'todo al día' : `en ${owingCount} encargo(s)`;
+
+    updateCashSummary();
   }
+
+  function updateCashSummary(){
+    const totalPaid = orders.reduce((sum,o) => sum + (Number(o.paid) || 0), 0);
+    const totalBalanceOwed = orders.reduce((sum,o) => sum + Math.max(o.total - o.paid, 0), 0);
+    document.getElementById('cashPaid').textContent = money(totalPaid);
+    document.getElementById('cashBalance').textContent = money(totalBalanceOwed);
+    document.getElementById('cashTotal').textContent = money(totalPaid + totalBalanceOwed);
+  }
+
+  const eyeOpenIcon = '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/>';
+  const eyeClosedIcon = '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.4 21.4 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a21.4 21.4 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+
+  function openAuthModal(){
+    const overlay = document.createElement('div');
+    overlay.className = 'auth-overlay';
+    overlay.innerHTML = `
+      <div class="auth-card">
+        <div class="form-title">Acceso de administrador</div>
+        <div class="field">
+          <label for="authUser">Usuario</label>
+          <input type="text" id="authUser" autocomplete="username">
+        </div>
+        <div class="field">
+          <label for="authPass">Contraseña</label>
+          <input type="password" id="authPass" autocomplete="current-password">
+        </div>
+        <div class="auth-error" id="authError" style="display:none;">Usuario o contraseña incorrectos.</div>
+        <div class="edit-actions" style="margin-top:14px;">
+          <button class="save" id="authSubmit">Entrar</button>
+          <button class="cancel" id="authCancel">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const userInput = overlay.querySelector('#authUser');
+    const passInput = overlay.querySelector('#authPass');
+    const errorMsg = overlay.querySelector('#authError');
+    userInput.focus();
+
+    function tryLogin(){
+      if(userInput.value.trim() === ADMIN_USER && passInput.value === ADMIN_PASS){
+        unlocked = true;
+        overlay.remove();
+        showCashPanel();
+      } else {
+        errorMsg.style.display = 'block';
+        passInput.value = '';
+        passInput.focus();
+      }
+    }
+    overlay.querySelector('#authSubmit').addEventListener('click', tryLogin);
+    overlay.querySelector('#authCancel').addEventListener('click', () => overlay.remove());
+    [userInput, passInput].forEach(el => el.addEventListener('keydown', e => { if(e.key === 'Enter') tryLogin(); }));
+    overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+  }
+
+  function showCashPanel(){
+    document.getElementById('cashPanel').style.display = 'block';
+    document.getElementById('cashToggleIcon').innerHTML = eyeClosedIcon;
+    document.getElementById('cashToggleText').textContent = 'Ocultar resumen de dinero';
+  }
+
+  document.getElementById('cashToggle').addEventListener('click', () => {
+    const panel = document.getElementById('cashPanel');
+    const showing = panel.style.display !== 'none';
+    if(showing){
+      panel.style.display = 'none';
+      document.getElementById('cashToggleIcon').innerHTML = eyeOpenIcon;
+      document.getElementById('cashToggleText').textContent = 'Ver resumen de dinero';
+      unlocked = false;
+      return;
+    }
+    if(unlocked) showCashPanel();
+    else openAuthModal();
+  });
 
   function addOrder(){
     const desc = descInput.value.trim();
@@ -636,7 +767,15 @@
 
   function toggleDelivered(id){
     const o = orders.find(o => o.id === id);
-    if(o) o.delivered = !o.delivered;
+    if(!o) return;
+    if(!o.delivered){
+      o._prevPaid = o.paid;   // guarda lo que llevaba abonado, por si se desmarca por error
+      o.paid = o.total;       // el saldo pendiente se suma al abonado
+      o.delivered = true;
+    } else {
+      o.delivered = false;
+      if(typeof o._prevPaid === 'number') o.paid = o._prevPaid;
+    }
     render();
     saveOrders();
   }
