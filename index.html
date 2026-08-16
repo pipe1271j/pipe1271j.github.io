@@ -106,6 +106,15 @@
   .cash-row.total{ padding-top:12px; }
   .cash-row.total span{ font-weight:600; color:var(--ink); }
   .cash-row.total strong{ color:var(--accent-strong); font-size:17px; }
+  .monthly-title{
+    font-size:11.5px; color:var(--ink-soft); font-weight:600; text-transform:uppercase; letter-spacing:.03em;
+    margin:16px 0 8px; padding-top:12px; border-top:1px solid var(--border);
+  }
+  .monthly-row{ display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; font-size:13px; }
+  .monthly-row .m-label{ color:var(--ink); font-weight:500; text-transform:capitalize; }
+  .monthly-row .m-count{ color:var(--ink-soft); font-size:11.5px; margin-left:6px; }
+  .monthly-row .m-value{ font-family:'IBM Plex Mono', monospace; color:var(--accent-strong); font-weight:600; }
+  .monthly-empty{ font-size:12.5px; color:var(--ink-soft); padding:4px 0; }
 
   /* Form */
   .form-card{
@@ -353,6 +362,8 @@
     <div class="cash-row"><span>Total abonado (ya en tu bolsillo)</span><strong id="cashPaid">$0</strong></div>
     <div class="cash-row"><span>Total saldo pendiente por cobrar</span><strong id="cashBalance">$0</strong></div>
     <div class="cash-row total"><span>Total general de todos los encargos</span><strong id="cashTotal">$0</strong></div>
+    <div class="monthly-title">Resumen por mes</div>
+    <div id="monthlyList"></div>
   </div>
 
   <div class="form-card">
@@ -552,7 +563,7 @@
       orders = (Array.isArray(data) && data.length) ? data : [
         { id: 1, desc: "Vestido para quince años", client: "Camila R.", phone: "3001234567", image: "", dueDate: addDays(3), total: 350000, paid: 150000, delivered: false },
         { id: 2, desc: "Arreglo de pantalón", client: "", phone: "", image: "", dueDate: addDays(-1), total: 20000, paid: 20000, delivered: false },
-        { id: 3, desc: "Cortina sala", client: "Don Jairo", phone: "3109876543", image: "", dueDate: addDays(-6), total: 180000, paid: 180000, delivered: true },
+        { id: 3, desc: "Cortina sala", client: "Don Jairo", phone: "3109876543", image: "", dueDate: addDays(-6), total: 180000, paid: 180000, delivered: true, deliveredAt: addDays(-6) },
       ];
       nextId = orders.length ? Math.max(...orders.map(o => o.id)) + 1 : 1;
       setSyncStatus('Sincronizado con Drive');
@@ -707,6 +718,33 @@
     document.getElementById('cashPaid').textContent = money(totalPaid);
     document.getElementById('cashBalance').textContent = money(totalBalanceOwed);
     document.getElementById('cashTotal').textContent = money(totalPaid + totalBalanceOwed);
+    renderMonthlySummary();
+  }
+
+  function renderMonthlySummary(){
+    const list = document.getElementById('monthlyList');
+    const delivered = orders.filter(o => o.delivered && o.deliveredAt);
+    if(delivered.length === 0){
+      list.innerHTML = '<div class="monthly-empty">Aún no hay entregas registradas.</div>';
+      return;
+    }
+    const groups = {};
+    delivered.forEach(o => {
+      const key = o.deliveredAt.slice(0,7); // YYYY-MM
+      if(!groups[key]) groups[key] = { count: 0, total: 0 };
+      groups[key].count += 1;
+      groups[key].total += Number(o.paid) || 0;
+    });
+    const months = Object.keys(groups).sort().reverse();
+    list.innerHTML = months.map(key => {
+      const [y, m] = key.split('-');
+      const label = new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('es-CO', { month: 'long', year: 'numeric' });
+      const g = groups[key];
+      return `<div class="monthly-row">
+        <span class="m-label">${label}<span class="m-count">· ${g.count} entregado${g.count === 1 ? '' : 's'}</span></span>
+        <span class="m-value">${money(g.total)}</span>
+      </div>`;
+    }).join('');
   }
 
   const eyeOpenIcon = '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/>';
@@ -834,11 +872,14 @@
     if(!o) return;
     if(!o.delivered){
       o._prevPaid = o.paid;   // guarda lo que llevaba abonado, por si se desmarca por error
+      o._prevDeliveredAt = o.deliveredAt;
       o.paid = o.total;       // el saldo pendiente se suma al abonado
       o.delivered = true;
+      o.deliveredAt = todayStr();
     } else {
       o.delivered = false;
       if(typeof o._prevPaid === 'number') o.paid = o._prevPaid;
+      o.deliveredAt = o._prevDeliveredAt || '';
     }
     render();
     saveOrders();
