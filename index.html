@@ -560,11 +560,7 @@
       const res = await fetch(SCRIPT_URL, { method: 'GET' });
       if(!res.ok) throw new Error('Respuesta no válida: ' + res.status);
       const data = await res.json();
-      orders = (Array.isArray(data) && data.length) ? data : [
-        { id: 1, desc: "Vestido para quince años", client: "Camila R.", phone: "3001234567", image: "", dueDate: addDays(3), total: 350000, paid: 150000, delivered: false },
-        { id: 2, desc: "Arreglo de pantalón", client: "", phone: "", image: "", dueDate: addDays(-1), total: 20000, paid: 20000, delivered: false },
-        { id: 3, desc: "Cortina sala", client: "Don Jairo", phone: "3109876543", image: "", dueDate: addDays(-6), total: 180000, paid: 180000, delivered: true, deliveredAt: addDays(-6) },
-      ];
+      orders = Array.isArray(data) ? data : [];
       nextId = orders.length ? Math.max(...orders.map(o => o.id)) + 1 : 1;
       setSyncStatus('Sincronizado con Drive');
     } catch(err){
