@@ -948,13 +948,13 @@
           <div class="receipt-footer">¡Gracias por tu confianza!</div>
         </div>
         <div class="receipt-actions">
-          <button class="r-download" id="rShare">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
-            <span id="rShareText">Compartir imagen</span>
+          <button class="r-download" id="rDownload">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Descargar
           </button>
           <button class="r-whatsapp" id="rWhatsapp">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15.5a8.5 8.5 0 0 1-11.4 4L3 21l1.6-6.4A8.5 8.5 0 1 1 21 15.5z"/></svg>
-            Enviar texto
+            Enviar
           </button>
           <button class="r-close" id="rClose" aria-label="Cerrar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -969,41 +969,21 @@
 
     overlay.querySelector('#rWhatsapp').addEventListener('click', () => openWhatsapp(order));
 
-    overlay.querySelector('#rShare').addEventListener('click', async () => {
-      const btn = overlay.querySelector('#rShare');
-      const label = overlay.querySelector('#rShareText');
-      const originalText = label.textContent;
-      label.textContent = 'Generando…';
+    overlay.querySelector('#rDownload').addEventListener('click', async () => {
+      const btn = overlay.querySelector('#rDownload');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = 'Generando…';
       try{
         const canvas = await html2canvas(document.getElementById('receiptCapture'), { backgroundColor: '#ffffff', scale: 2 });
-        const fileName = `comprobante-${order.desc.replace(/\s+/g,'-').toLowerCase().slice(0,30)}.png`;
-
-        canvas.toBlob(async (blob) => {
-          if(!blob){ label.textContent = originalText; return; }
-          const file = new File([blob], fileName, { type: 'image/png' });
-
-          if(navigator.canShare && navigator.canShare({ files: [file] })){
-            try{
-              await navigator.share({ files: [file], title: 'Comprobante de encargo', text: whatsappTextFor(order) });
-            } catch(shareErr){
-              if(shareErr.name !== 'AbortError') console.error('Error al compartir:', shareErr);
-            }
-          } else {
-            // El navegador no soporta compartir archivos: se descarga como respaldo
-            const link = document.createElement('a');
-            link.download = fileName;
-            link.href = URL.createObjectURL(blob);
-            link.click();
-            URL.revokeObjectURL(link.href);
-            alert('Tu navegador no permite compartir la imagen directo, así que se descargó — puedes adjuntarla manualmente en WhatsApp.');
-          }
-          label.textContent = originalText;
-        }, 'image/png');
+        const link = document.createElement('a');
+        link.download = `comprobante-${order.desc.replace(/\s+/g,'-').toLowerCase().slice(0,30)}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
       } catch(err){
         console.error('No se pudo generar la imagen del comprobante:', err);
         alert('No se pudo generar la imagen. Intenta de nuevo.');
-        label.textContent = originalText;
       }
+      btn.innerHTML = originalText;
     });
   }
 
