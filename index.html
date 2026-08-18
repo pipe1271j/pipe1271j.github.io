@@ -77,6 +77,10 @@
   .theme-toggle:active{transform:scale(0.94);}
   .theme-toggle svg{width:18px; height:18px;}
   .topbar-actions{ display:flex; gap:8px; flex:0 0 auto; }
+  .session-bar{
+    font-size:11.5px; color:var(--ink-soft); margin:-10px 0 16px; padding-bottom:2px;
+  }
+  .session-bar strong{ color:var(--accent-strong); font-weight:600; }
 
   /* Summary cards */
   .stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
@@ -216,6 +220,7 @@
   .card-desc{ font-size:15px; font-weight:600; color:var(--ink); word-break:break-word; }
   .card.status-delivered .card-desc{ color:var(--ink-soft); }
   .card-client-row{ display:flex; align-items:center; gap:8px; margin-top:3px; flex-wrap:wrap; }
+  .added-by{ font-size:10.5px; color:var(--ink-soft); opacity:.75; margin-top:4px; font-style:italic; }
   .card-client{ font-size:12.5px; color:var(--ink-soft); }
   .contact-btn{
     display:flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px;
@@ -249,6 +254,27 @@
   }
   .auth-card .field input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
   .auth-error{ font-size:12.5px; color:var(--danger); margin-top:-4px; }
+
+  /* Login screen */
+  .login-screen{
+    position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center;
+    padding:20px; z-index:2000;
+  }
+  .login-card{
+    width:100%; max-width:340px; background:var(--surface); border:1px solid var(--border); border-radius:18px;
+    padding:32px 26px; box-shadow:var(--shadow); display:flex; flex-direction:column; align-items:center;
+    text-align:center;
+  }
+  .login-logo{ width:64px; height:64px; border-radius:50%; object-fit:cover; margin-bottom:14px; box-shadow:0 2px 10px rgba(31,42,36,0.18); }
+  .login-title{ font-family:'Fraunces', serif; font-weight:600; font-size:22px; color:var(--ink); }
+  .login-subtitle{ font-size:12.5px; color:var(--ink-soft); margin-bottom:20px; }
+  .login-card .field{ width:100%; text-align:left; margin-bottom:12px; }
+  .login-card .field input{
+    width:100%; padding:11px 13px; border-radius:10px; border:1px solid var(--border); background:var(--bg);
+    color:var(--ink); font-family:'Inter', sans-serif; font-size:14px; outline:none;
+  }
+  .login-card .field input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .login-card .auth-error{ width:100%; text-align:left; margin-bottom:8px; }
 
   /* Receipt */
   .receipt-overlay{
@@ -364,7 +390,26 @@
 </style>
 </head>
 <body>
-<div class="shell">
+
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <img class="login-logo" src="" id="loginLogo" alt="Crea imagen">
+    <div class="login-title">Encargos</div>
+    <div class="login-subtitle">Inicia sesión para continuar</div>
+    <div class="field">
+      <label for="loginUser">Usuario</label>
+      <input type="text" id="loginUser" autocomplete="username">
+    </div>
+    <div class="field">
+      <label for="loginPass">Contraseña</label>
+      <input type="password" id="loginPass" autocomplete="current-password">
+    </div>
+    <div class="auth-error" id="loginError" style="display:none;">Usuario o contraseña incorrectos.</div>
+    <button class="add-btn" id="loginSubmit" style="margin-top:4px;">Entrar</button>
+  </div>
+</div>
+
+<div class="shell" id="appShell" style="display:none;">
 
   <div class="topbar">
     <div class="brand">
@@ -375,14 +420,21 @@
       </div>
     </div>
     <div class="topbar-actions">
+      <button class="theme-toggle" id="adminMenuBtn" aria-label="Menú de administración" title="Menú de administración" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/><path d="M12 8v4l2.5 2.5"/></svg>
+      </button>
       <button class="theme-toggle" id="backupBtn" aria-label="Descargar respaldo" title="Descargar respaldo">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       </button>
       <button class="theme-toggle" id="themeToggle" aria-label="Cambiar tema" title="Cambiar tema claro/oscuro">
         <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
       </button>
+      <button class="theme-toggle" id="logoutBtn" aria-label="Cerrar sesión" title="Cerrar sesión">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
     </div>
   </div>
+  <div class="session-bar">Sesión activa: <strong id="sessionUserLabel">—</strong></div>
 
   <div class="stats">
     <div class="stat-card">
@@ -497,9 +549,7 @@
   let searchQuery = "";
   let isDark = false;
   const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzcwd94Re9yobftgl3iHEbQMj1kS79jvJ1sVyPt_UmYdu6k7utQ39uJw-GwmUxD-ABbuA/exec';
-  const ADMIN_USER = 'Creaimagen';
-  const ADMIN_PASS = 'Creatividad2026';
-  let unlocked = false;
+  const LOGO_DATA_URL = 'data:image/webp;base64,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';
 
   const list = document.getElementById('list');
   const descInput = document.getElementById('descInput');
@@ -703,6 +753,7 @@
                   </a>
                 ` : ''}
               </div>` : ''}
+              ${order.addedBy ? `<div class="added-by">Agregado por ${escapeHtml(order.addedBy)}</div>` : ''}
             </div>
           </div>
           <div class="card-actions">
@@ -794,56 +845,8 @@
   const eyeOpenIcon = '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/>';
   const eyeClosedIcon = '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.4 21.4 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a21.4 21.4 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
 
-  function openAuthModal(){
-    const overlay = document.createElement('div');
-    overlay.className = 'auth-overlay';
-    overlay.innerHTML = `
-      <div class="auth-card">
-        <div class="form-title">Acceso de administrador</div>
-        <div class="field">
-          <label for="authUser">Usuario</label>
-          <input type="text" id="authUser" autocomplete="username">
-        </div>
-        <div class="field">
-          <label for="authPass">Contraseña</label>
-          <input type="password" id="authPass" autocomplete="current-password">
-        </div>
-        <div class="auth-error" id="authError" style="display:none;">Usuario o contraseña incorrectos.</div>
-        <div class="edit-actions" style="margin-top:14px;">
-          <button class="save" id="authSubmit">Entrar</button>
-          <button class="cancel" id="authCancel">Cancelar</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(overlay);
-    const userInput = overlay.querySelector('#authUser');
-    const passInput = overlay.querySelector('#authPass');
-    const errorMsg = overlay.querySelector('#authError');
-    userInput.focus();
-
-    function tryLogin(){
-      if(userInput.value.trim() === ADMIN_USER && passInput.value === ADMIN_PASS){
-        unlocked = true;
-        overlay.remove();
-        showCashPanel();
-      } else {
-        errorMsg.style.display = 'block';
-        passInput.value = '';
-        passInput.focus();
-      }
-    }
-    overlay.querySelector('#authSubmit').addEventListener('click', tryLogin);
-    overlay.querySelector('#authCancel').addEventListener('click', () => overlay.remove());
-    [userInput, passInput].forEach(el => el.addEventListener('keydown', e => { if(e.key === 'Enter') tryLogin(); }));
-    overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
-  }
-
-  function showCashPanel(){
-    document.getElementById('cashPanel').style.display = 'block';
-    document.getElementById('cashToggleIcon').innerHTML = eyeClosedIcon;
-    document.getElementById('cashToggleText').textContent = 'Ocultar resumen de dinero';
-  }
-
+  // El resumen de dinero ya está protegido por el inicio de sesión con roles:
+  // solo Programador y Dueño ven el botón, así que aquí ya no se pide clave aparte.
   document.getElementById('cashToggle').addEventListener('click', () => {
     const panel = document.getElementById('cashPanel');
     const showing = panel.style.display !== 'none';
@@ -851,11 +854,11 @@
       panel.style.display = 'none';
       document.getElementById('cashToggleIcon').innerHTML = eyeOpenIcon;
       document.getElementById('cashToggleText').textContent = 'Ver resumen de dinero';
-      unlocked = false;
-      return;
+    } else {
+      panel.style.display = 'block';
+      document.getElementById('cashToggleIcon').innerHTML = eyeClosedIcon;
+      document.getElementById('cashToggleText').textContent = 'Ocultar resumen de dinero';
     }
-    if(unlocked) showCashPanel();
-    else openAuthModal();
   });
 
   function addOrder(){
@@ -872,7 +875,8 @@
       dueDate: dateInput.value || '',
       total,
       paid,
-      delivered: false
+      delivered: false,
+      addedBy: currentUser ? currentUser.displayName : ''
     });
     descInput.value = ''; clientInput.value = ''; phoneInput.value = ''; dateInput.value = ''; totalInput.value = ''; paidInput.value = '';
     pendingImage = ''; imageInput.value = ''; previewWrap.style.display = 'none'; uploadLabelText.textContent = 'Subir foto';
@@ -889,7 +893,6 @@
     document.body.appendChild(box);
   }
 
-  const LOGO_DATA_URL = 'data:image/webp;base64,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';
 
   function whatsappTextFor(order){
     const balance = order.total - order.paid;
@@ -1140,7 +1143,132 @@
   });
   themeIcon.innerHTML = moonPath;
 
-  loadOrders();
+  // ===================== Sesión y roles =====================
+  let currentUser = null;   // { username, role, displayName }
+  let settingsData = { displayNames: {} };
+
+  document.getElementById('loginLogo').src = LOGO_DATA_URL;
+
+  async function attemptLogin(){
+    const userEl = document.getElementById('loginUser');
+    const passEl = document.getElementById('loginPass');
+    const errEl = document.getElementById('loginError');
+    const btn = document.getElementById('loginSubmit');
+    const username = userEl.value.trim();
+    const password = passEl.value;
+    if(!username || !password) return;
+
+    errEl.style.display = 'none';
+    const originalText = btn.textContent;
+    btn.textContent = 'Verificando…';
+    btn.disabled = true;
+
+    try{
+      const res = await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'login', username, password })
+      });
+      const data = await res.json();
+      if(data && data.ok){
+        currentUser = { username: data.username, role: data.role, displayName: data.displayName };
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('appShell').style.display = 'block';
+        applyRolePermissions();
+        await loadSettings();
+        await loadOrders();
+      } else {
+        errEl.style.display = 'block';
+        passEl.value = '';
+        passEl.focus();
+      }
+    } catch(err){
+      console.error('Error al iniciar sesión:', err);
+      errEl.textContent = 'No se pudo conectar. Intenta de nuevo.';
+      errEl.style.display = 'block';
+    }
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+
+  document.getElementById('loginSubmit').addEventListener('click', attemptLogin);
+  ['loginUser','loginPass'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => { if(e.key === 'Enter') attemptLogin(); });
+  });
+
+  function applyRolePermissions(){
+    const canSeeMoney = currentUser.role === 'programador' || currentUser.role === 'dueno';
+    document.getElementById('cashToggle').style.display = canSeeMoney ? 'flex' : 'none';
+    document.getElementById('cashPanel').style.display = 'none';
+    document.getElementById('adminMenuBtn').style.display = canSeeMoney ? 'flex' : 'none';
+    document.getElementById('sessionUserLabel').textContent = currentUser.displayName;
+  }
+
+  async function loadSettings(){
+    try{
+      const res = await fetch(SCRIPT_URL + '?type=settings');
+      const data = await res.json();
+      settingsData = (data && typeof data === 'object') ? data : { displayNames: {} };
+      if(!settingsData.displayNames) settingsData.displayNames = {};
+    } catch(err){
+      console.error('No se pudieron cargar los ajustes:', err);
+      settingsData = { displayNames: {} };
+    }
+  }
+
+  async function saveSettings(){
+    try{
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'saveSettings', settings: settingsData })
+      });
+    } catch(err){
+      console.error('No se pudieron guardar los ajustes:', err);
+    }
+  }
+
+  // ===================== Menú de administración =====================
+  document.getElementById('adminMenuBtn').addEventListener('click', () => {
+    const overlay = document.createElement('div');
+    overlay.className = 'auth-overlay';
+    const currentWorkerName = settingsData.displayNames['Trabajador1'] || 'Trabajador1';
+    overlay.innerHTML = `
+      <div class="auth-card">
+        <div class="form-title">Menú de administración</div>
+        <div class="field">
+          <label for="workerNameInput">Nombre visible del trabajador</label>
+          <input type="text" id="workerNameInput" value="${escapeHtml(currentWorkerName)}" maxlength="60">
+        </div>
+        <div class="edit-actions" style="margin-top:14px;">
+          <button class="save" id="workerNameSave">Guardar</button>
+          <button class="cancel" id="workerNameCancel">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#workerNameInput');
+    input.focus();
+    overlay.querySelector('#workerNameCancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#workerNameSave').addEventListener('click', async () => {
+      const newName = input.value.trim() || 'Trabajador1';
+      settingsData.displayNames['Trabajador1'] = newName;
+      await saveSettings();
+      if(currentUser.username === 'Trabajador1') currentUser.displayName = newName;
+      document.getElementById('sessionUserLabel').textContent = currentUser.displayName;
+      overlay.remove();
+    });
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', () => {
+    currentUser = null;
+    document.getElementById('appShell').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('loginUser').value = '';
+    document.getElementById('loginPass').value = '';
+    document.getElementById('loginUser').focus();
+  });
 </script>
 </body>
 </html>
