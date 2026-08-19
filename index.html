@@ -140,12 +140,12 @@
   .form-grid.row2{ grid-template-columns: 1fr 1fr 1fr; }
   .field{ display:flex; flex-direction:column; gap:5px; }
   .field label{ font-size:11.5px; color:var(--ink-soft); font-weight:500; }
-  .field input{
+  .field input, .field select{
     padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg);
     color:var(--ink); font-family:'Inter', sans-serif; font-size:14px; outline:none;
     transition:border-color .2s ease, box-shadow .2s ease, background .35s ease;
   }
-  .field input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .field input:focus, .field select:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
   .field input::placeholder{ color:var(--ink-soft); opacity:.7; }
   .add-btn{
     display:flex; align-items:center; justify-content:center; gap:6px; width:100%;
@@ -343,6 +343,7 @@
   .badge.overdue{ background:var(--danger-soft); color:var(--danger); }
   .badge.soon{ background:var(--amber-soft); color:var(--amber); }
   .badge.pending{ background:var(--surface-hover); color:var(--ink-soft); }
+  .badge.method-badge{ background:var(--surface-hover); color:var(--ink-soft); margin-left:6px; }
 
   .money-row{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
   .money-box{ background:var(--bg); border-radius:10px; padding:9px 10px; }
@@ -545,6 +546,14 @@
         <input type="number" id="paidInput" placeholder="0" min="0" step="1000">
       </div>
     </div>
+    <div class="field" style="margin-bottom:12px;">
+      <label for="paymentMethodInput">Método de pago</label>
+      <select id="paymentMethodInput">
+        <option value="Efectivo">Efectivo</option>
+        <option value="Nequi">Nequi</option>
+        <option value="Bold">Bold</option>
+      </select>
+    </div>
     <button class="add-btn" id="addBtn">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Agregar encargo
@@ -593,6 +602,7 @@
   const dateInput = document.getElementById('dateInput');
   const totalInput = document.getElementById('totalInput');
   const paidInput = document.getElementById('paidInput');
+  const paymentMethodInput = document.getElementById('paymentMethodInput');
   const addBtn = document.getElementById('addBtn');
   const emptyState = document.getElementById('emptyState');
   const emptyTitle = document.getElementById('emptyTitle');
@@ -679,6 +689,12 @@
     const diffDays = (new Date(order.dueDate) - new Date(todayStr())) / 86400000;
     if(diffDays <= 2) return 'soon';
     return 'pending';
+  }
+
+  function methodIcon(method){
+    if(method === 'Nequi') return '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>';
+    if(method === 'Bold') return '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>';
+    return '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="margin-right:4px;"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/></svg>';
   }
 
   function badgeFor(status, order){
@@ -803,6 +819,7 @@
           </div>
         </div>
         <span class="badge ${badge.cls}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${badge.icon}</svg>${badge.text}</span>
+        ${order.paymentMethod ? `<span class="badge method-badge">${methodIcon(order.paymentMethod)}${order.paymentMethod}</span>` : ''}
         <div class="money-row">
           <div class="money-box"><div class="money-label">Total</div><div class="money-value">${money(order.total)}</div></div>
           <div class="money-box"><div class="money-label">Pagado</div><div class="money-value">${money(order.paid)}</div></div>
@@ -912,10 +929,11 @@
       dueDate: dateInput.value || '',
       total,
       paid,
+      paymentMethod: paymentMethodInput.value,
       delivered: false,
       addedBy: currentUser ? currentUser.username : ''
     });
-    descInput.value = ''; clientInput.value = ''; phoneInput.value = ''; dateInput.value = ''; totalInput.value = ''; paidInput.value = '';
+    descInput.value = ''; clientInput.value = ''; phoneInput.value = ''; dateInput.value = ''; totalInput.value = ''; paidInput.value = ''; paymentMethodInput.value = 'Efectivo';
     pendingImage = ''; imageInput.value = ''; previewWrap.style.display = 'none'; uploadLabelText.textContent = 'Subir foto';
     render();
     saveOrders();
@@ -983,6 +1001,7 @@
             <div class="receipt-field"><span>Total</span><strong>${money(order.total)}</strong></div>
             <div class="receipt-field"><span>Abonado</span><strong>${money(order.paid)}</strong></div>
             <div class="receipt-field balance ${balance > 0 ? '' : 'clear'}"><span>Saldo</span><strong>${money(balance)}</strong></div>
+            ${order.paymentMethod ? `<div class="receipt-field"><span>Método de pago</span><strong>${escapeHtml(order.paymentMethod)}</strong></div>` : ''}
           </div>
           <div class="receipt-total"><span>${balance > 0 ? 'Saldo pendiente' : 'Pagado en su totalidad'}</span><strong>${balance > 0 ? money(balance) : '✔'}</strong></div>
           <div class="receipt-footer">¡Gracias por tu confianza!</div>
@@ -1069,6 +1088,7 @@
     let editImage = order.image || '';
     const isWorker = currentUser && currentUser.role === 'trabajador';
 
+    const currentMethod = order.paymentMethod || 'Efectivo';
     const moneyDateBlock = isWorker
       ? `
         <div class="locked-field">
@@ -1083,11 +1103,20 @@
           <span class="locked-label">Abonado</span>
           <span class="locked-value">${money(order.paid)}</span>
         </div>
+        <div class="locked-field">
+          <span class="locked-label">Método de pago</span>
+          <span class="locked-value">${escapeHtml(currentMethod)}</span>
+        </div>
       `
       : `
         <input type="date" class="e-date" value="${order.dueDate || ''}">
         <input type="number" class="e-total" value="${order.total}" placeholder="Monto total" min="0" step="1000">
         <input type="number" class="e-paid" value="${order.paid}" placeholder="Ya pagó" min="0" step="1000">
+        <select class="e-method">
+          <option value="Efectivo" ${currentMethod === 'Efectivo' ? 'selected' : ''}>Efectivo</option>
+          <option value="Nequi" ${currentMethod === 'Nequi' ? 'selected' : ''}>Nequi</option>
+          <option value="Bold" ${currentMethod === 'Bold' ? 'selected' : ''}>Bold</option>
+        </select>
       `;
 
     const imageBlock = isWorker ? '' : `
@@ -1151,6 +1180,7 @@
         order.dueDate = row.querySelector('.e-date').value || '';
         order.total = Number(row.querySelector('.e-total').value) || 0;
         order.paid = Number(row.querySelector('.e-paid').value) || 0;
+        order.paymentMethod = row.querySelector('.e-method').value;
         order.image = editImage;
       }
       render();
@@ -1203,6 +1233,14 @@
           <label for="qsValor">Valor</label>
           <input type="number" id="qsValor" placeholder="0" min="0" step="500">
         </div>
+        <div class="field">
+          <label for="qsMethod">Método de pago</label>
+          <select id="qsMethod">
+            <option value="Efectivo">Efectivo</option>
+            <option value="Nequi">Nequi</option>
+            <option value="Bold">Bold</option>
+          </select>
+        </div>
         <div class="auth-error" id="qsError" style="display:none;">Escribe qué se vendió y el valor.</div>
         <div class="edit-actions" style="margin-top:14px;">
           <button class="save" id="qsSave">Guardar</button>
@@ -1213,6 +1251,7 @@
     document.body.appendChild(overlay);
     const descEl = overlay.querySelector('#qsDesc');
     const valorEl = overlay.querySelector('#qsValor');
+    const methodEl = overlay.querySelector('#qsMethod');
     const errEl = overlay.querySelector('#qsError');
     descEl.focus();
 
@@ -1232,6 +1271,7 @@
         dueDate: '',
         total: valor,
         paid: valor,
+        paymentMethod: methodEl.value,
         delivered: true,
         deliveredAt: todayStr(),
         addedBy: currentUser ? currentUser.username : ''
@@ -1273,7 +1313,7 @@
       const pending = orders.filter(o => !o.delivered).slice().sort((a,b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'));
       const done = orders.filter(o => o.delivered).slice().sort((a,b) => (b.deliveredAt || '').localeCompare(a.deliveredAt || ''));
 
-      const cols = ['Descripción', 'Cliente', 'Teléfono', 'Entrega', 'Total', 'Abonado', 'Saldo'];
+      const cols = ['Descripción', 'Cliente', 'Teléfono', 'Entrega', 'Total', 'Abonado', 'Saldo', 'Pago'];
       const toRows = list => list.map(o => [
         o.desc,
         o.client || '—',
@@ -1281,7 +1321,8 @@
         o.dueDate ? fmtDate(o.dueDate) : '—',
         money(o.total),
         money(o.paid),
-        money(o.total - o.paid)
+        money(o.total - o.paid),
+        o.paymentMethod || '—'
       ]);
 
       let cursorY = 84;
@@ -1450,19 +1491,28 @@
     const todayItems = orders.filter(o => o.delivered && o.deliveredAt === today);
     const total = todayItems.reduce((sum, o) => sum + (Number(o.paid) || 0), 0);
 
+    const byMethod = { Efectivo: 0, Nequi: 0, Bold: 0 };
+    todayItems.forEach(o => {
+      const m = byMethod.hasOwnProperty(o.paymentMethod) ? o.paymentMethod : 'Efectivo';
+      byMethod[m] += Number(o.paid) || 0;
+    });
+
     const overlay = document.createElement('div');
     overlay.className = 'receipt-overlay';
     const rowsHtml = todayItems.length
       ? todayItems.map(o => `
           <div class="receipt-field">
-            <span>${escapeHtml(o.desc)}${o.client ? ' · ' + escapeHtml(o.client) : ''}</span>
+            <span>${escapeHtml(o.desc)}${o.client ? ' · ' + escapeHtml(o.client) : ''} <em style="font-style:normal; color:#9AA19A;">(${escapeHtml(o.paymentMethod || 'Efectivo')})</em></span>
             <strong>${money(o.paid)}</strong>
           </div>`).join('')
       : `<div class="receipt-field"><span>Sin movimientos entregados hoy todavía.</span><strong></strong></div>`;
 
+    const methodRows = Object.keys(byMethod).map(m => `
+          <div class="receipt-field"><span>${m}</span><strong>${money(byMethod[m])}</strong></div>`).join('');
+
     overlay.innerHTML = `
       <div class="receipt-wrap">
-        <div class="receipt-card">
+        <div class="receipt-card" id="dailyClosingCapture">
           <div class="receipt-head">
             <img class="receipt-logo" src="${LOGO_DATA_URL}" alt="Crea imagen">
             <div class="receipt-biz">Crea imagen</div>
@@ -1471,15 +1521,39 @@
           <hr class="receipt-divider">
           <div class="receipt-title">Caja del día · ${fmtDate(today)}</div>
           <div class="receipt-money">${rowsHtml}</div>
+          <hr class="receipt-divider">
+          <div class="receipt-title">Por método de pago</div>
+          <div class="receipt-money">${methodRows}</div>
           <div class="receipt-total"><span>Total recibido hoy</span><strong>${money(total)}</strong></div>
           <div class="receipt-footer">${todayItems.length} movimiento${todayItems.length === 1 ? '' : 's'} entregado${todayItems.length === 1 ? '' : 's'} hoy</div>
         </div>
         <div class="receipt-actions">
-          <button class="r-close" id="dcClose" style="flex:1;">Cerrar</button>
+          <button class="r-download" id="dcDownload">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Descargar PDF
+          </button>
+          <button class="r-close" id="dcClose">Cerrar</button>
         </div>
       </div>
     `;
     document.body.appendChild(overlay);
+    overlay.querySelector('#dcDownload').addEventListener('click', async () => {
+      const btn = overlay.querySelector('#dcDownload');
+      const originalHtml = btn.innerHTML;
+      btn.innerHTML = 'Generando…';
+      try{
+        const canvas = await html2canvas(document.getElementById('dailyClosingCapture'), { backgroundColor: '#ffffff', scale: 2 });
+        const { jsPDF } = window.jspdf;
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({ unit: 'px', format: [canvas.width, canvas.height] });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save(`caja-del-dia-${today}.pdf`);
+      } catch(err){
+        console.error('No se pudo generar el PDF de caja del día:', err);
+        alert('No se pudo generar el PDF. Intenta de nuevo.');
+      }
+      btn.innerHTML = originalHtml;
+    });
     overlay.querySelector('#dcClose').addEventListener('click', () => overlay.remove());
     overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
   });
