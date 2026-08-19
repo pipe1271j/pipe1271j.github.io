@@ -97,10 +97,11 @@
   .stat-sub{ font-size:11.5px; color:var(--ink-soft); margin-top:3px; }
 
   /* Cash summary (hidden by default) */
+  .cash-buttons-row{ display:flex; gap:10px; margin-bottom:14px; }
   .cash-toggle{
-    width:100%; display:flex; align-items:center; justify-content:center; gap:8px;
+    flex:1; display:flex; align-items:center; justify-content:center; gap:8px;
     padding:11px; border-radius:12px; border:1px dashed var(--border); background:var(--surface);
-    color:var(--ink-soft); font-size:13.5px; font-weight:600; cursor:pointer; margin-bottom:14px;
+    color:var(--ink-soft); font-size:13.5px; font-weight:600; cursor:pointer;
     transition:all .18s ease; font-family:'Inter', sans-serif;
   }
   .cash-toggle:hover{ border-color:var(--accent); color:var(--accent-strong); background:var(--surface-hover); }
@@ -259,11 +260,11 @@
     padding:20px; box-shadow:var(--shadow); width:100%; max-width:320px;
   }
   .auth-card .field{ margin-bottom:12px; }
-  .auth-card .field input{
+  .auth-card .field input, .auth-card .field select{
     width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg);
     color:var(--ink); font-family:'Inter', sans-serif; font-size:14px; outline:none;
   }
-  .auth-card .field input:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .auth-card .field input:focus, .auth-card .field select:focus{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
   .auth-error{ font-size:12.5px; color:var(--danger); margin-top:-4px; }
 
   /* Login screen */
@@ -478,10 +479,16 @@
     </div>
   </div>
 
-  <button class="cash-toggle" id="cashToggle">
-    <svg id="cashToggleIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-    <span id="cashToggleText">Ver resumen de dinero</span>
-  </button>
+  <div class="cash-buttons-row">
+    <button class="cash-toggle" id="cashToggle">
+      <svg id="cashToggleIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span id="cashToggleText">Ver resumen de dinero</span>
+    </button>
+    <button class="cash-toggle" id="dailyClosingBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span>Cerrar caja del día</span>
+    </button>
+  </div>
   <div class="cash-panel" id="cashPanel" style="display:none;">
     <div class="cash-row"><span>Total abonado (ya en tu bolsillo)</span><strong id="cashPaid">$0</strong></div>
     <div class="cash-row"><span>Total saldo pendiente por cobrar</span><strong id="cashBalance">$0</strong></div>
@@ -1375,6 +1382,7 @@
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('appShell').style.display = 'block';
         applyRolePermissions();
+        resetInactivityTimer();
         await loadSettings();
         await loadOrders();
       } else {
@@ -1400,6 +1408,7 @@
     const canSeeMoney = currentUser.role === 'programador' || currentUser.role === 'dueno';
     document.getElementById('cashToggle').style.display = canSeeMoney ? 'flex' : 'none';
     document.getElementById('cashPanel').style.display = 'none';
+    document.getElementById('dailyClosingBtn').style.display = canSeeMoney ? 'flex' : 'none';
     document.getElementById('adminMenuBtn').style.display = canSeeMoney ? 'flex' : 'none';
     document.getElementById('sessionUserLabel').textContent = currentUser.displayName;
   }
@@ -1436,17 +1445,60 @@
   }
 
   // ===================== Menú de administración =====================
-  document.getElementById('adminMenuBtn').addEventListener('click', () => {
+  document.getElementById('dailyClosingBtn').addEventListener('click', () => {
+    const today = todayStr();
+    const todayItems = orders.filter(o => o.delivered && o.deliveredAt === today);
+    const total = todayItems.reduce((sum, o) => sum + (Number(o.paid) || 0), 0);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'receipt-overlay';
+    const rowsHtml = todayItems.length
+      ? todayItems.map(o => `
+          <div class="receipt-field">
+            <span>${escapeHtml(o.desc)}${o.client ? ' · ' + escapeHtml(o.client) : ''}</span>
+            <strong>${money(o.paid)}</strong>
+          </div>`).join('')
+      : `<div class="receipt-field"><span>Sin movimientos entregados hoy todavía.</span><strong></strong></div>`;
+
+    overlay.innerHTML = `
+      <div class="receipt-wrap">
+        <div class="receipt-card">
+          <div class="receipt-head">
+            <img class="receipt-logo" src="${LOGO_DATA_URL}" alt="Crea imagen">
+            <div class="receipt-biz">Crea imagen</div>
+            <div class="receipt-tagline">Agencia de publicidad</div>
+          </div>
+          <hr class="receipt-divider">
+          <div class="receipt-title">Caja del día · ${fmtDate(today)}</div>
+          <div class="receipt-money">${rowsHtml}</div>
+          <div class="receipt-total"><span>Total recibido hoy</span><strong>${money(total)}</strong></div>
+          <div class="receipt-footer">${todayItems.length} movimiento${todayItems.length === 1 ? '' : 's'} entregado${todayItems.length === 1 ? '' : 's'} hoy</div>
+        </div>
+        <div class="receipt-actions">
+          <button class="r-close" id="dcClose" style="flex:1;">Cerrar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#dcClose').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+  });
+
+  document.getElementById('adminMenuBtn').addEventListener('click', async () => {
     const overlay = document.createElement('div');
     overlay.className = 'auth-overlay';
-    const currentWorkerName = settingsData.displayNames['Trabajador1'] || 'Trabajador1';
     overlay.innerHTML = `
       <div class="auth-card">
         <div class="form-title">Menú de administración</div>
         <div class="field">
-          <label for="workerNameInput">Nombre visible del trabajador</label>
-          <input type="text" id="workerNameInput" value="${escapeHtml(currentWorkerName)}" maxlength="60">
+          <label for="workerSelect">Trabajador</label>
+          <select id="workerSelect"></select>
         </div>
+        <div class="field">
+          <label for="workerNameInput">Nombre visible</label>
+          <input type="text" id="workerNameInput" maxlength="60">
+        </div>
+        <div class="auth-error" id="workerError" style="display:none;">No hay trabajadores registrados todavía.</div>
         <div class="edit-actions" style="margin-top:14px;">
           <button class="save" id="workerNameSave">Guardar</button>
           <button class="cancel" id="workerNameCancel">Cancelar</button>
@@ -1454,29 +1506,82 @@
       </div>
     `;
     document.body.appendChild(overlay);
-    const input = overlay.querySelector('#workerNameInput');
-    input.focus();
     overlay.querySelector('#workerNameCancel').addEventListener('click', () => overlay.remove());
     overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+
+    const select = overlay.querySelector('#workerSelect');
+    const input = overlay.querySelector('#workerNameInput');
+    const errEl = overlay.querySelector('#workerError');
+
+    let workers = [];
+    try{
+      const res = await fetch(SCRIPT_URL + '?type=workers');
+      workers = await res.json();
+    } catch(err){
+      console.error('No se pudo obtener la lista de trabajadores:', err);
+    }
+
+    if(!Array.isArray(workers) || workers.length === 0){
+      errEl.style.display = 'block';
+      select.disabled = true;
+      input.disabled = true;
+      overlay.querySelector('#workerNameSave').disabled = true;
+      return;
+    }
+
+    select.innerHTML = workers.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(settingsData.displayNames[u] || u)}</option>`).join('');
+    function fillNameForSelected(){
+      const u = select.value;
+      input.value = settingsData.displayNames[u] || u;
+    }
+    fillNameForSelected();
+    select.addEventListener('change', fillNameForSelected);
+    input.focus();
+
     overlay.querySelector('#workerNameSave').addEventListener('click', async () => {
-      const newName = input.value.trim() || 'Trabajador1';
-      settingsData.displayNames['Trabajador1'] = newName;
+      const username = select.value;
+      const newName = input.value.trim() || username;
+      settingsData.displayNames[username] = newName;
       await saveSettings();
-      if(currentUser.username === 'Trabajador1') currentUser.displayName = newName;
+      if(currentUser.username === username) currentUser.displayName = newName;
       document.getElementById('sessionUserLabel').textContent = currentUser.displayName;
       render();
       overlay.remove();
     });
   });
 
-  document.getElementById('logoutBtn').addEventListener('click', () => {
+  function doLogout(reason){
     currentUser = null;
+    clearTimeout(inactivityTimer);
     document.getElementById('appShell').style.display = 'none';
     document.getElementById('loginScreen').style.display = 'flex';
     document.getElementById('loginUser').value = '';
     document.getElementById('loginPass').value = '';
+    const errEl = document.getElementById('loginError');
+    if(reason === 'inactivity'){
+      errEl.textContent = 'Se cerró la sesión por inactividad. Vuelve a iniciar sesión.';
+      errEl.style.display = 'block';
+    } else {
+      errEl.style.display = 'none';
+    }
     document.getElementById('loginUser').focus();
+  }
+
+  document.getElementById('logoutBtn').addEventListener('click', () => doLogout());
+
+  // ===================== Cierre de sesión por inactividad =====================
+  const INACTIVITY_LIMIT_MS = 8 * 60 * 60 * 1000; // 8 horas
+  let inactivityTimer = null;
+
+  function resetInactivityTimer(){
+    if(!currentUser) return;
+    clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => doLogout('inactivity'), INACTIVITY_LIMIT_MS);
+  }
+  ['click','keydown','mousemove','touchstart','scroll'].forEach(evt => {
+    document.addEventListener(evt, resetInactivityTimer, { passive: true });
   });
 </script>
 </body>
+
 </html>
