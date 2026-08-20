@@ -600,6 +600,7 @@
 
 <script>
   let orders = [];
+  let deletedIds = new Set(); // encargos borrados en esta sesión: la fusión de seguridad no debe revivirlos
   let nextId = 1;
   let currentFilter = "all";
   let searchQuery = "";
@@ -772,8 +773,8 @@
       const merged = localOrders.slice();
       let addedFromOther = false;
       serverOrders.forEach(so => {
-        if(!localIds.has(so.id)){
-          merged.push(so); // alguien más lo agregó mientras guardábamos
+        if(!localIds.has(so.id) && !deletedIds.has(so.id)){
+          merged.push(so); // alguien más lo agregó mientras guardábamos (y no fue borrado por nosotros)
           addedFromOther = true;
         }
       });
@@ -1221,6 +1222,7 @@
     if(currentUser && currentUser.role === 'trabajador') return;
     const row = list.querySelector(`.card[data-id="${id}"]`);
     if(row) row.classList.add('removing'); // esto es solo el efecto visual, no bloquea el borrado real
+    deletedIds.add(id);
     orders = orders.filter(o => o.id !== id);
     saveOrders();
     // Se vuelve a dibujar la lista un instante después, para alcanzar a ver la animación
