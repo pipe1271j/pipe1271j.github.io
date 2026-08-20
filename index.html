@@ -1108,7 +1108,34 @@
     });
   }
 
-  function toggleDelivered(id){
+  async function checkStaleOrder(id){
+    // Revisa el estado real más reciente en Drive antes de una acción de dinero.
+    // Si otro dispositivo ya cambió este encargo, sincroniza en vez de duplicar.
+    try{
+      const res = await fetch(SCRIPT_URL, { method: 'GET' });
+      const serverOrders = await res.json();
+      if(!Array.isArray(serverOrders)) return true;
+      const serverOrder = serverOrders.find(x => x.id === id);
+      const localOrder = orders.find(x => x.id === id);
+      if(!serverOrder || !localOrder) return true;
+      const serverPaid = JSON.stringify(serverOrder.payments || []);
+      const localPaid = JSON.stringify(localOrder.payments || []);
+      if(serverOrder.delivered !== localOrder.delivered || serverPaid !== localPaid){
+        Object.assign(localOrder, serverOrder);
+        render();
+        alert('Este encargo se actualizó desde otro dispositivo. Se sincronizó con lo más reciente — revisa la tarjeta y, si aún hace falta, vuelve a intentarlo.');
+        return false;
+      }
+      return true;
+    } catch(err){
+      console.warn('No se pudo verificar el estado más reciente, se continúa de todas formas:', err);
+      return true;
+    }
+  }
+
+  async function toggleDelivered(id){
+    const upToDate = await checkStaleOrder(id);
+    if(!upToDate) return;
     const o = orders.find(o => o.id === id);
     if(!o) return;
     if(!o.delivered){
@@ -1137,7 +1164,9 @@
     saveOrders();
   }
 
-  function openRegisterPayment(id){
+  async function openRegisterPayment(id){
+    const upToDate = await checkStaleOrder(id);
+    if(!upToDate) return;
     const order = orders.find(o => o.id === id);
     if(!order) return;
     const balance = order.total - order.paid;
@@ -1191,18 +1220,12 @@
   function deleteOrder(id){
     if(currentUser && currentUser.role === 'trabajador') return;
     const row = list.querySelector(`.card[data-id="${id}"]`);
-    if(row){
-      row.classList.add('removing');
-      row.addEventListener('transitionend', () => {
-        orders = orders.filter(o => o.id !== id);
-        render();
-        saveOrders();
-      }, { once:true });
-    } else {
-      orders = orders.filter(o => o.id !== id);
-      render();
-      saveOrders();
-    }
+    if(row) row.classList.add('removing'); // esto es solo el efecto visual, no bloquea el borrado real
+    orders = orders.filter(o => o.id !== id);
+    saveOrders();
+    // Se vuelve a dibujar la lista un instante después, para alcanzar a ver la animación
+    // sin depender de que el evento "transitionend" se dispare (por eso fallaba antes).
+    setTimeout(render, row ? 260 : 0);
   }
 
   function startEdit(id){
