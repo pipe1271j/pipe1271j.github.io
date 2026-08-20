@@ -368,6 +368,13 @@
   }
   .receipt-btn:hover{ border-color:#3EA262; color:#3EA262; }
   .receipt-btn svg{ width:14px; height:14px; }
+  .pay-btn{
+    display:flex; align-items:center; gap:6px; padding:8px 13px; border-radius:9px; border:1px solid var(--border);
+    background:var(--bg); color:var(--ink-soft); font-size:12.5px; font-weight:600; cursor:pointer;
+    transition:all .18s ease; font-family:'Inter', sans-serif;
+  }
+  .pay-btn:hover{ border-color:var(--amber); color:var(--amber); }
+  .pay-btn svg{ width:14px; height:14px; }
 
   /* Edit mode */
   .edit-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px; }
@@ -549,6 +556,7 @@
     <div class="field" style="margin-bottom:12px;">
       <label for="paymentMethodInput">Método de pago</label>
       <select id="paymentMethodInput">
+        <option value="Ninguna">Ninguna (sin abono aún)</option>
         <option value="Efectivo">Efectivo</option>
         <option value="Nequi">Nequi</option>
         <option value="Bold">Bold</option>
@@ -561,6 +569,10 @@
     <button class="quick-btn" id="quickSaleBtn">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z"/></svg>
       Venta rápida (sin cliente)
+    </button>
+    <button class="quick-btn" id="expenseBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><circle cx="18" cy="12" r="1.5"/></svg>
+      Registrar gasto
     </button>
   </div>
 
@@ -704,7 +716,17 @@
     return { cls:'pending', text: order.dueDate ? ('Entrega ' + fmtDate(order.dueDate)) : 'Sin fecha de entrega', icon:'<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/>' };
   }
 
-  async function loadOrders(){
+  // Cola de peticiones: garantiza que nunca se crucen dos guardados/cargas al
+  // mismo tiempo. Sin esto, dos acciones rápidas seguidas podían llegar a
+  // Google en el orden equivocado y la más vieja borraba la más nueva.
+  let ioQueue = Promise.resolve();
+
+  function loadOrders(){
+    ioQueue = ioQueue.then(() => actualLoadOrders()).catch(err => console.error(err));
+    return ioQueue;
+  }
+
+  async function actualLoadOrders(){
     setSyncStatus('Cargando desde Drive…');
     try{
       const res = await fetch(SCRIPT_URL, { method: 'GET' });
@@ -727,15 +749,47 @@
     return d.toISOString().slice(0,10);
   }
 
-  async function saveOrders(){
+  function saveOrders(){
+    const payload = JSON.stringify(orders); // foto exacta del estado actual, tomada YA
+    ioQueue = ioQueue.then(() => actualSaveOrders(payload)).catch(err => console.error(err));
+    return ioQueue;
+  }
+
+  async function actualSaveOrders(payload){
     setSyncStatus('Guardando en Drive…');
     try{
+      // Respaldo de seguridad: antes de sobrescribir, revisa si algo se agregó
+      // desde otro dispositivo mientras tanto, y lo combina en vez de perderlo.
+      let serverOrders = [];
+      try{
+        const resCheck = await fetch(SCRIPT_URL, { method: 'GET' });
+        const dataCheck = await resCheck.json();
+        if(Array.isArray(dataCheck)) serverOrders = dataCheck;
+      } catch(checkErr){ /* si esto falla, seguimos solo con lo local */ }
+
+      const localOrders = JSON.parse(payload);
+      const localIds = new Set(localOrders.map(o => o.id));
+      const merged = localOrders.slice();
+      let addedFromOther = false;
+      serverOrders.forEach(so => {
+        if(!localIds.has(so.id)){
+          merged.push(so); // alguien más lo agregó mientras guardábamos
+          addedFromOther = true;
+        }
+      });
+
       const res = await fetch(SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(orders)
+        body: JSON.stringify(merged)
       });
       if(!res.ok) throw new Error('Respuesta no válida: ' + res.status);
+
+      if(addedFromOther){
+        orders = merged;
+        if(orders.length) nextId = Math.max(nextId, Math.max(...orders.map(o => o.id)) + 1);
+        render();
+      }
       setSyncStatus('Guardado en Drive');
     } catch(err){
       console.error('Error al guardar los encargos en Drive:', err);
@@ -826,6 +880,11 @@
           <div class="money-box"><div class="money-label">Saldo</div><div class="money-value ${balance > 0 ? 'balance-due' : 'balance-clear'}">${money(balance)}</div></div>
         </div>
         <div class="card-footer">
+          ${balance > 0 ? `
+          <button class="pay-btn" title="Registra un pago sin marcarlo como entregado">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Registrar pago
+          </button>` : ''}
           <button class="deliver-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12 10 18 20 6"/></svg>
             ${order.delivered ? 'Entregado' : 'Marcar entregado'}
@@ -920,6 +979,8 @@
     if(!desc) { descInput.focus(); return; }
     const total = Number(totalInput.value) || 0;
     const paid = Math.min(Number(paidInput.value) || 0, total || Number(paidInput.value) || 0);
+    const method = paid > 0 ? paymentMethodInput.value : 'Ninguna';
+    const payments = paid > 0 ? [{ amount: paid, method, date: todayStr() }] : [];
     orders.push({
       id: nextId++,
       desc,
@@ -929,11 +990,12 @@
       dueDate: dateInput.value || '',
       total,
       paid,
-      paymentMethod: paymentMethodInput.value,
+      paymentMethod: method,
+      payments,
       delivered: false,
       addedBy: currentUser ? currentUser.username : ''
     });
-    descInput.value = ''; clientInput.value = ''; phoneInput.value = ''; dateInput.value = ''; totalInput.value = ''; paidInput.value = ''; paymentMethodInput.value = 'Efectivo';
+    descInput.value = ''; clientInput.value = ''; phoneInput.value = ''; dateInput.value = ''; totalInput.value = ''; paidInput.value = ''; paymentMethodInput.value = 'Ninguna';
     pendingImage = ''; imageInput.value = ''; previewWrap.style.display = 'none'; uploadLabelText.textContent = 'Subir foto';
     render();
     saveOrders();
@@ -1052,16 +1114,78 @@
     if(!o.delivered){
       o._prevPaid = o.paid;   // guarda lo que llevaba abonado, por si se desmarca por error
       o._prevDeliveredAt = o.deliveredAt;
-      o.paid = o.total;       // el saldo pendiente se suma al abonado
+      o._prevPayments = (o.payments || []).slice();
+      const balance = o.total - o.paid;
+      if(balance > 0){
+        // Solo si queda saldo se registra ese pago HOY — si ya estaba pagado
+        // por completo (ej. con "Registrar pago" antes), no se duplica nada.
+        if(!o.payments) o.payments = [];
+        const method = (o.paymentMethod && o.paymentMethod !== 'Ninguna') ? o.paymentMethod : 'Efectivo';
+        o.payments.push({ amount: balance, method, date: todayStr() });
+        o.paid = o.total;
+        o.paymentMethod = method;
+      }
       o.delivered = true;
       o.deliveredAt = todayStr();
     } else {
       o.delivered = false;
       if(typeof o._prevPaid === 'number') o.paid = o._prevPaid;
+      if(o._prevPayments) o.payments = o._prevPayments;
       o.deliveredAt = o._prevDeliveredAt || '';
     }
     render();
     saveOrders();
+  }
+
+  function openRegisterPayment(id){
+    const order = orders.find(o => o.id === id);
+    if(!order) return;
+    const balance = order.total - order.paid;
+    const overlay = document.createElement('div');
+    overlay.className = 'auth-overlay';
+    overlay.innerHTML = `
+      <div class="auth-card">
+        <div class="form-title">Registrar pago</div>
+        <div class="field">
+          <label for="payAmount">Monto recibido (saldo: ${money(balance)})</label>
+          <input type="number" id="payAmount" placeholder="0" min="0" step="500" value="${balance}">
+        </div>
+        <div class="field">
+          <label for="payMethod">Método de pago</label>
+          <select id="payMethod">
+            <option value="Efectivo">Efectivo</option>
+            <option value="Nequi">Nequi</option>
+            <option value="Bold">Bold</option>
+          </select>
+        </div>
+        <div class="auth-error" id="payError" style="display:none;">Escribe un monto válido.</div>
+        <div class="edit-actions" style="margin-top:14px;">
+          <button class="save" id="paySave">Registrar</button>
+          <button class="cancel" id="payCancel">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const amountEl = overlay.querySelector('#payAmount');
+    const methodEl = overlay.querySelector('#payMethod');
+    const errEl = overlay.querySelector('#payError');
+    amountEl.focus();
+    amountEl.select();
+
+    overlay.querySelector('#payCancel').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+
+    overlay.querySelector('#paySave').addEventListener('click', () => {
+      const amount = Number(amountEl.value) || 0;
+      if(amount <= 0){ errEl.style.display = 'block'; return; }
+      if(!order.payments) order.payments = [];
+      order.payments.push({ amount, method: methodEl.value, date: todayStr() });
+      order.paid = Math.min(order.total, order.paid + amount);
+      order.paymentMethod = methodEl.value;
+      render();
+      saveOrders();
+      overlay.remove();
+    });
   }
 
   function deleteOrder(id){
@@ -1088,7 +1212,7 @@
     let editImage = order.image || '';
     const isWorker = currentUser && currentUser.role === 'trabajador';
 
-    const currentMethod = order.paymentMethod || 'Efectivo';
+    const currentMethod = order.paymentMethod || 'Ninguna';
     const moneyDateBlock = isWorker
       ? `
         <div class="locked-field">
@@ -1113,6 +1237,7 @@
         <input type="number" class="e-total" value="${order.total}" placeholder="Monto total" min="0" step="1000">
         <input type="number" class="e-paid" value="${order.paid}" placeholder="Ya pagó" min="0" step="1000">
         <select class="e-method">
+          <option value="Ninguna" ${currentMethod === 'Ninguna' ? 'selected' : ''}>Ninguna</option>
           <option value="Efectivo" ${currentMethod === 'Efectivo' ? 'selected' : ''}>Efectivo</option>
           <option value="Nequi" ${currentMethod === 'Nequi' ? 'selected' : ''}>Nequi</option>
           <option value="Bold" ${currentMethod === 'Bold' ? 'selected' : ''}>Bold</option>
@@ -1179,8 +1304,16 @@
       if(!isWorker){
         order.dueDate = row.querySelector('.e-date').value || '';
         order.total = Number(row.querySelector('.e-total').value) || 0;
-        order.paid = Number(row.querySelector('.e-paid').value) || 0;
-        order.paymentMethod = row.querySelector('.e-method').value;
+        const newPaid = Number(row.querySelector('.e-paid').value) || 0;
+        const newMethod = row.querySelector('.e-method').value;
+        const delta = newPaid - order.paid;
+        if(delta > 0 && newMethod !== 'Ninguna'){
+          // Se aumentó el abonado a mano: se registra esa diferencia en el historial de hoy
+          if(!order.payments) order.payments = [];
+          order.payments.push({ amount: delta, method: newMethod, date: todayStr() });
+        }
+        order.paid = newPaid;
+        order.paymentMethod = newMethod;
         order.image = editImage;
       }
       render();
@@ -1196,6 +1329,7 @@
     const thumb = e.target.closest('.card-thumb');
     if(thumb){ openLightbox(thumb.src); return; }
     if(e.target.closest('.deliver-btn')) toggleDelivered(id);
+    else if(e.target.closest('.pay-btn')) openRegisterPayment(id);
     else if(e.target.closest('.receipt-btn')) sendReceipt(id);
     else if(e.target.closest('.edit')) startEdit(id);
     else if(e.target.closest('.delete')) deleteOrder(id);
@@ -1272,6 +1406,7 @@
         total: valor,
         paid: valor,
         paymentMethod: methodEl.value,
+        payments: [{ amount: valor, method: methodEl.value, date: todayStr() }],
         delivered: true,
         deliveredAt: todayStr(),
         addedBy: currentUser ? currentUser.username : ''
@@ -1286,10 +1421,75 @@
     overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
   });
 
+  let nextExpenseId = 1;
+
+  document.getElementById('expenseBtn').addEventListener('click', () => {
+    const overlay = document.createElement('div');
+    overlay.className = 'auth-overlay';
+    overlay.innerHTML = `
+      <div class="auth-card">
+        <div class="form-title">Registrar gasto</div>
+        <div class="field">
+          <label for="exDesc">¿En qué se gastó?</label>
+          <input type="text" id="exDesc" placeholder="Ej: Resma de papel" maxlength="120">
+        </div>
+        <div class="field">
+          <label for="exValor">Valor</label>
+          <input type="number" id="exValor" placeholder="0" min="0" step="500">
+        </div>
+        <div class="field">
+          <label for="exMethod">Pagado con</label>
+          <select id="exMethod">
+            <option value="Efectivo">Efectivo</option>
+            <option value="Nequi">Nequi</option>
+            <option value="Bold">Bold</option>
+          </select>
+        </div>
+        <div class="auth-error" id="exError" style="display:none;">Escribe en qué se gastó y el valor.</div>
+        <div class="edit-actions" style="margin-top:14px;">
+          <button class="save" id="exSave">Guardar</button>
+          <button class="cancel" id="exCancel">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    const descEl = overlay.querySelector('#exDesc');
+    const valorEl = overlay.querySelector('#exValor');
+    const methodEl = overlay.querySelector('#exMethod');
+    const errEl = overlay.querySelector('#exError');
+    descEl.focus();
+
+    function saveExpense(){
+      const desc = descEl.value.trim();
+      const valor = Number(valorEl.value) || 0;
+      if(!desc || valor <= 0){
+        errEl.style.display = 'block';
+        return;
+      }
+      if(!expenses.length) nextExpenseId = 1;
+      else nextExpenseId = Math.max(...expenses.map(g => g.id || 0)) + 1;
+      expenses.push({
+        id: nextExpenseId,
+        desc,
+        amount: valor,
+        method: methodEl.value,
+        date: todayStr(),
+        addedBy: currentUser ? currentUser.username : ''
+      });
+      saveExpenses();
+      overlay.remove();
+    }
+    overlay.querySelector('#exSave').addEventListener('click', saveExpense);
+    overlay.querySelector('#exCancel').addEventListener('click', () => overlay.remove());
+    [descEl, valorEl].forEach(el => el.addEventListener('keydown', e => { if(e.key === 'Enter') saveExpense(); }));
+    overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+  });
+
   document.getElementById('refreshBtn').addEventListener('click', async () => {
     const icon = document.getElementById('refreshIcon');
     icon.style.animation = 'spin .7s linear infinite';
     await loadOrders();
+    await loadExpenses();
     icon.style.animation = '';
   });
 
@@ -1394,6 +1594,7 @@
   // ===================== Sesión y roles =====================
   let currentUser = null;   // { username, role, displayName }
   let settingsData = { displayNames: {} };
+  let expenses = [];
 
   document.getElementById('loginLogo').src = LOGO_DATA_URL;
 
@@ -1425,6 +1626,7 @@
         applyRolePermissions();
         resetInactivityTimer();
         await loadSettings();
+        await loadExpenses();
         await loadOrders();
       } else {
         errEl.style.display = 'block';
@@ -1485,27 +1687,76 @@
     }
   }
 
+  async function loadExpenses(){
+    try{
+      const res = await fetch(SCRIPT_URL + '?type=expenses');
+      const data = await res.json();
+      expenses = Array.isArray(data) ? data : [];
+    } catch(err){
+      console.error('No se pudieron cargar los gastos:', err);
+      expenses = [];
+    }
+  }
+
+  async function saveExpenses(){
+    try{
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'saveExpenses', expenses })
+      });
+    } catch(err){
+      console.error('No se pudieron guardar los gastos:', err);
+    }
+  }
+
   // ===================== Menú de administración =====================
   document.getElementById('dailyClosingBtn').addEventListener('click', () => {
     const today = todayStr();
-    const todayItems = orders.filter(o => o.delivered && o.deliveredAt === today);
-    const total = todayItems.reduce((sum, o) => sum + (Number(o.paid) || 0), 0);
+
+    // Se arma con base en CUÁNDO se pagó cada cosa (no cuándo se entregó),
+    // así lo que pagan hoy y recogen otro día no se cuenta dos veces.
+    const todayPayments = [];
+    orders.forEach(o => {
+      (o.payments || []).forEach(p => {
+        if(p.date === today){
+          todayPayments.push({ desc: o.desc, client: o.client, amount: p.amount, method: p.method });
+        }
+      });
+    });
+    const totalIn = todayPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+    const todayExpenses = expenses.filter(g => g.date === today);
+    const totalOut = todayExpenses.reduce((sum, g) => sum + (Number(g.amount) || 0), 0);
 
     const byMethod = { Efectivo: 0, Nequi: 0, Bold: 0 };
-    todayItems.forEach(o => {
-      const m = byMethod.hasOwnProperty(o.paymentMethod) ? o.paymentMethod : 'Efectivo';
-      byMethod[m] += Number(o.paid) || 0;
+    todayPayments.forEach(p => {
+      const m = byMethod.hasOwnProperty(p.method) ? p.method : 'Efectivo';
+      byMethod[m] += Number(p.amount) || 0;
+    });
+    todayExpenses.forEach(g => {
+      const m = byMethod.hasOwnProperty(g.method) ? g.method : 'Efectivo';
+      byMethod[m] -= Number(g.amount) || 0;
     });
 
     const overlay = document.createElement('div');
     overlay.className = 'receipt-overlay';
-    const rowsHtml = todayItems.length
-      ? todayItems.map(o => `
+
+    const paymentsHtml = todayPayments.length
+      ? todayPayments.map(p => `
           <div class="receipt-field">
-            <span>${escapeHtml(o.desc)}${o.client ? ' · ' + escapeHtml(o.client) : ''} <em style="font-style:normal; color:#9AA19A;">(${escapeHtml(o.paymentMethod || 'Efectivo')})</em></span>
-            <strong>${money(o.paid)}</strong>
+            <span>${escapeHtml(p.desc)}${p.client ? ' · ' + escapeHtml(p.client) : ''} <em style="font-style:normal; color:#9AA19A;">(${escapeHtml(p.method)})</em></span>
+            <strong>${money(p.amount)}</strong>
           </div>`).join('')
-      : `<div class="receipt-field"><span>Sin movimientos entregados hoy todavía.</span><strong></strong></div>`;
+      : `<div class="receipt-field"><span>Sin pagos recibidos hoy todavía.</span><strong></strong></div>`;
+
+    const expensesHtml = todayExpenses.length
+      ? todayExpenses.map(g => `
+          <div class="receipt-field">
+            <span>${escapeHtml(g.desc)} <em style="font-style:normal; color:#9AA19A;">(${escapeHtml(g.method)})</em></span>
+            <strong style="color:#B5484B;">- ${money(g.amount)}</strong>
+          </div>`).join('')
+      : `<div class="receipt-field"><span>Sin gastos registrados hoy.</span><strong></strong></div>`;
 
     const methodRows = Object.keys(byMethod).map(m => `
           <div class="receipt-field"><span>${m}</span><strong>${money(byMethod[m])}</strong></div>`).join('');
@@ -1520,12 +1771,16 @@
           </div>
           <hr class="receipt-divider">
           <div class="receipt-title">Caja del día · ${fmtDate(today)}</div>
-          <div class="receipt-money">${rowsHtml}</div>
+          <div class="receipt-money">${paymentsHtml}</div>
           <hr class="receipt-divider">
-          <div class="receipt-title">Por método de pago</div>
+          <div class="receipt-title">Gastos de hoy</div>
+          <div class="receipt-money">${expensesHtml}</div>
+          <hr class="receipt-divider">
+          <div class="receipt-title">Por método de pago (neto)</div>
           <div class="receipt-money">${methodRows}</div>
-          <div class="receipt-total"><span>Total recibido hoy</span><strong>${money(total)}</strong></div>
-          <div class="receipt-footer">${todayItems.length} movimiento${todayItems.length === 1 ? '' : 's'} entregado${todayItems.length === 1 ? '' : 's'} hoy</div>
+          <div class="receipt-total"><span>Ingresos</span><strong>${money(totalIn)}</strong></div>
+          <div class="receipt-total"><span>Gastos</span><strong style="color:#B5484B;">- ${money(totalOut)}</strong></div>
+          <div class="receipt-total"><span>Neto del día</span><strong>${money(totalIn - totalOut)}</strong></div>
         </div>
         <div class="receipt-actions">
           <button class="r-download" id="dcDownload">
