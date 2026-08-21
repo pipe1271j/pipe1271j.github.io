@@ -92,6 +92,20 @@
     padding:14px 14px; box-shadow:var(--shadow); transition:background .35s ease, border-color .35s ease;
   }
   .stat-label{ font-size:11.5px; color:var(--ink-soft); font-weight:600; text-transform:uppercase; letter-spacing:.03em; margin-bottom:6px; }
+  .stat-label-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .stat-label-row .stat-label{ margin-bottom:0; }
+  .eye-toggle{
+    display:flex; align-items:center; justify-content:center; width:20px; height:20px; padding:0;
+    border:none; background:none; color:var(--ink-soft); cursor:pointer; flex:0 0 auto;
+  }
+  .eye-toggle:hover{ color:var(--accent-strong); }
+  .eye-toggle svg{ width:15px; height:15px; }
+  .split-check{
+    display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-soft);
+    margin:2px 0 12px; cursor:pointer;
+  }
+  .split-check input{ width:15px; height:15px; accent-color:var(--accent); cursor:pointer; }
+  .split-note{ font-size:12px; color:var(--accent-strong); font-weight:600; margin:-4px 0 12px; }
   .stat-value{ font-family:'IBM Plex Mono', monospace; font-size:17px; font-weight:600; color:var(--ink); line-height:1.2; }
   .stat-value.money{ color:var(--accent-strong); }
   .stat-sub{ font-size:11.5px; color:var(--ink-soft); margin-top:3px; }
@@ -481,7 +495,12 @@
       <div class="stat-sub" id="statNextSub"></div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Saldo por cobrar</div>
+      <div class="stat-label-row">
+        <div class="stat-label">Saldo por cobrar</div>
+        <button class="eye-toggle" id="balanceEyeToggle" aria-label="Mostrar u ocultar el saldo" title="Mostrar u ocultar">
+          <svg id="balanceEyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+        </button>
+      </div>
       <div class="stat-value money" id="statBalance">$0</div>
       <div class="stat-sub" id="statBalanceSub">en total</div>
     </div>
@@ -914,7 +933,8 @@
     }
 
     const totalBalance = orders.reduce((sum,o) => sum + Math.max(o.total - o.paid, 0), 0);
-    statBalance.textContent = money(totalBalance);
+    lastTotalBalance = totalBalance;
+    renderBalanceDisplay();
     const owingCount = orders.filter(o => (o.total - o.paid) > 0).length;
     statBalanceSub.textContent = owingCount === 0 ? 'todo al día' : `en ${owingCount} encargo(s)`;
 
@@ -1400,6 +1420,25 @@
             <option value="Bold">Bold</option>
           </select>
         </div>
+        <label class="split-check">
+          <input type="checkbox" id="qsSplit">
+          Pagaron con dos métodos (ej. parte efectivo, parte Nequi)
+        </label>
+        <div id="qsSplitFields" style="display:none;">
+          <div class="field">
+            <label for="qsMethod2">Segundo método</label>
+            <select id="qsMethod2">
+              <option value="Efectivo">Efectivo</option>
+              <option value="Nequi">Nequi</option>
+              <option value="Bold">Bold</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="qsValor2">Valor del segundo pago</label>
+            <input type="number" id="qsValor2" placeholder="0" min="0" step="500">
+          </div>
+          <div class="split-note" id="qsSplitTotal"></div>
+        </div>
         <div class="auth-error" id="qsError" style="display:none;">Escribe qué se vendió y el valor.</div>
         <div class="edit-actions" style="margin-top:14px;">
           <button class="save" id="qsSave">Guardar</button>
@@ -1412,7 +1451,24 @@
     const valorEl = overlay.querySelector('#qsValor');
     const methodEl = overlay.querySelector('#qsMethod');
     const errEl = overlay.querySelector('#qsError');
+    const splitCheck = overlay.querySelector('#qsSplit');
+    const splitFields = overlay.querySelector('#qsSplitFields');
+    const method2El = overlay.querySelector('#qsMethod2');
+    const valor2El = overlay.querySelector('#qsValor2');
+    const splitTotalEl = overlay.querySelector('#qsSplitTotal');
     descEl.focus();
+
+    splitCheck.addEventListener('change', () => {
+      splitFields.style.display = splitCheck.checked ? 'block' : 'none';
+      updateSplitTotal();
+    });
+    function updateSplitTotal(){
+      if(!splitCheck.checked) return;
+      const v1 = Number(valorEl.value) || 0;
+      const v2 = Number(valor2El.value) || 0;
+      splitTotalEl.textContent = 'Total de la venta: ' + money(v1 + v2);
+    }
+    [valorEl, valor2El].forEach(el => el.addEventListener('input', updateSplitTotal));
 
     function saveQuick(){
       const desc = descEl.value.trim();
@@ -1421,6 +1477,27 @@
         errEl.style.display = 'block';
         return;
       }
+
+      let total, payments, methodLabel;
+      if(splitCheck.checked){
+        const valor2 = Number(valor2El.value) || 0;
+        if(valor2 <= 0){
+          errEl.textContent = 'Escribe también el valor del segundo pago.';
+          errEl.style.display = 'block';
+          return;
+        }
+        total = valor + valor2;
+        payments = [
+          { amount: valor, method: methodEl.value, date: todayStr() },
+          { amount: valor2, method: method2El.value, date: todayStr() }
+        ];
+        methodLabel = methodEl.value === method2El.value ? methodEl.value : (methodEl.value + ' + ' + method2El.value);
+      } else {
+        total = valor;
+        payments = [{ amount: valor, method: methodEl.value, date: todayStr() }];
+        methodLabel = methodEl.value;
+      }
+
       orders.push({
         id: nextId++,
         desc,
@@ -1428,10 +1505,10 @@
         phone: '',
         image: '',
         dueDate: '',
-        total: valor,
-        paid: valor,
-        paymentMethod: methodEl.value,
-        payments: [{ amount: valor, method: methodEl.value, date: todayStr() }],
+        total,
+        paid: total,
+        paymentMethod: methodLabel,
+        payments,
         delivered: true,
         deliveredAt: todayStr(),
         addedBy: currentUser ? currentUser.username : ''
@@ -1619,6 +1696,8 @@
   // ===================== Sesión y roles =====================
   let currentUser = null;   // { username, role, displayName }
   let settingsData = { displayNames: {} };
+  let lastTotalBalance = 0;
+  let balanceHidden = true; // oculto por defecto, por privacidad
   let expenses = [];
 
   document.getElementById('loginLogo').src = LOGO_DATA_URL;
@@ -1935,6 +2014,24 @@
   ['click','keydown','mousemove','touchstart','scroll'].forEach(evt => {
     document.addEventListener(evt, resetInactivityTimer, { passive: true });
   });
+
+  // ===================== Ojito para ocultar el saldo por cobrar =====================
+  const eyeOpenIconSmall = '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/>';
+  const eyeClosedIconSmall = '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.4 21.4 0 0 1 5.06-6.06M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a21.4 21.4 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+
+  function renderBalanceDisplay(){
+    const el = document.getElementById('statBalance');
+    const icon = document.getElementById('balanceEyeIcon');
+    if(!el || !icon) return;
+    el.textContent = balanceHidden ? '••••••' : money(lastTotalBalance);
+    icon.innerHTML = balanceHidden ? eyeClosedIconSmall : eyeOpenIconSmall;
+  }
+
+  document.getElementById('balanceEyeToggle').addEventListener('click', () => {
+    balanceHidden = !balanceHidden;
+    renderBalanceDisplay();
+  });
+  renderBalanceDisplay();
 </script>
 </body>
 
