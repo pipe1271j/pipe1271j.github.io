@@ -1473,6 +1473,7 @@
     function saveQuick(){
       const desc = descEl.value.trim();
       const valor = Number(valorEl.value) || 0;
+      errEl.textContent = 'Escribe qué se vendió y el valor.';
       if(!desc || valor <= 0){
         errEl.style.display = 'block';
         return;
